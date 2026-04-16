@@ -1,0 +1,65 @@
+services:
+  postgres:
+    image: postgres:16
+    network_mode: host
+    environment:
+      POSTGRES_USER: trackward
+      POSTGRES_PASSWORD: trackward
+      POSTGRES_DB: trackward
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trackward"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+  minio:
+    image: minio/minio:latest
+    network_mode: host
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - minio_data:/data
+
+  createbucket:
+    image: minio/mc:latest
+    network_mode: host
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      sleep 3;
+      mc alias set local http://localhost:9000 minioadmin minioadmin;
+      mc mb --ignore-existing local/trackward-artifacts;
+      mc version enable local/trackward-artifacts;
+      echo 'Bucket ready';
+      "
+
+  # OpenTelemetry collector — receives spans from ledger + gateway on :4317,
+  # forwards to Jaeger. Uses host networking so services can point at
+  # OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317.
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.110.0
+    network_mode: host
+    command: ["--config=/etc/otel-collector.yaml"]
+    volumes:
+      - ./infra/otel/otel-collector.yaml:/etc/otel-collector.yaml:ro
+    depends_on:
+      - jaeger
+
+  # Jaeger all-in-one for local trace inspection. UI on http://localhost:16686.
+  # Accepts OTLP on 14317 (mapped so it doesn't clash with the collector on 4317).
+  jaeger:
+    image: jaegertracing/all-in-one:1.60
+    network_mode: host
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+      COLLECTOR_OTLP_GRPC_HOST_PORT: ":14317"
+      COLLECTOR_OTLP_HTTP_HOST_PORT: ":14318"
+
+volumes:
+  pgdata:
+  minio_data:
