@@ -1,0 +1,2 @@
+{"id": "bs-1", "slice": "en-US", "input": "Explain database replication.", "expected_contains": ["replication"]}
+{"id": "bs-2", "slice": "es-ES", "input": "Explica la replicación de base de datos.", "expected_contains": ["replicación"]}

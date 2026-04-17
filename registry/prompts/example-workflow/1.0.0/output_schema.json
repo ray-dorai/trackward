@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "example-workflow output",
+  "type": "object",
+  "required": ["answer", "citations"],
+  "properties": {
+    "answer": {
+      "type": "string",
+      "description": "Agent-produced response to the user."
+    },
+    "citations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["artifact_id", "span"],
+        "properties": {
+          "artifact_id": { "type": "string", "format": "uuid" },
+          "span": { "type": "string" }
+        }
+      }
+    }
+  }
+}

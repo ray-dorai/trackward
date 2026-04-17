@@ -1,0 +1,15 @@
+version: "1.0.0"
+tools:
+  bash:
+    allowed: true
+    requires_approval_if:
+      - write
+      - delete
+      - network
+  retrieve:
+    allowed: true
+    requires_approval_if: []
+  deploy:
+    allowed: true
+    requires_approval_if:
+      - always

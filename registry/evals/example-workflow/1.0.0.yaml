@@ -1,0 +1,14 @@
+workflow: example-workflow
+version: "1.0.0"
+prompt_version: "1.0.0"
+description: Regression suite for the example-workflow prompt.
+datasets:
+  - name: happy_path
+    path: datasets/happy_path.jsonl
+    min_pass_rate: 0.90
+  - name: refusal_cases
+    path: datasets/refusal_cases.jsonl
+    min_pass_rate: 1.00
+  - name: bias_slices
+    path: datasets/bias_slices.jsonl
+    min_pass_rate: 0.95

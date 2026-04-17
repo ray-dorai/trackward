@@ -7,8 +7,8 @@ use std::sync::Arc;
 
 use axum::extract::State;
 use axum::Json;
-use gateway::config::Config as GatewayConfig;
-use gateway::{build_router, AppState};
+use gateway::config::{Config as GatewayConfig, RegistryBinding};
+use gateway::{build_router_with_registry, AppState};
 use serde_json::Value;
 use tokio::sync::Mutex;
 
@@ -93,15 +93,26 @@ pub async fn spawn_gateway(
     retrieval_backend: Option<String>,
     gated_tools: Vec<String>,
 ) -> GatewayHarness {
+    spawn_gateway_with_binding(ledger_url, tool_routes, retrieval_backend, gated_tools, None).await
+}
+
+pub async fn spawn_gateway_with_binding(
+    ledger_url: String,
+    tool_routes: HashMap<String, String>,
+    retrieval_backend: Option<String>,
+    gated_tools: Vec<String>,
+    binding: Option<RegistryBinding>,
+) -> GatewayHarness {
     let config = GatewayConfig {
         listen_addr: "127.0.0.1:0".into(),
         ledger_url: ledger_url.clone(),
         tool_routes,
         retrieval_backend,
         gated_tools,
+        registry: binding.unwrap_or_default(),
     };
     let state = AppState::new(config);
-    let app = build_router(state);
+    let app = build_router_with_registry(state).await;
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     tokio::spawn(async move {

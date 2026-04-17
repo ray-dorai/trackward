@@ -1,0 +1,15 @@
+version: "1.0.0"
+scope: global
+description: Default guardrails applied to every agent run.
+limits:
+  max_tool_calls_per_run: 100
+  max_retrieval_docs_per_run: 50
+  max_run_duration_seconds: 1800
+denied_tools: []
+required_approvals:
+  - deploy
+redaction:
+  strip_secrets: true
+  patterns:
+    - "(?i)aws_secret_access_key"
+    - "(?i)api[_-]?key"
