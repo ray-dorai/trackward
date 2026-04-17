@@ -8,7 +8,7 @@ use axum::Json;
 use serde_json::json;
 
 use crate::errors::Error;
-use crate::tool_proxy::provenance::{extract_run_id, RUN_ID_HEADER};
+use crate::tool_proxy::provenance::{resolve_or_mint_run, RUN_ID_HEADER};
 use crate::AppState;
 
 /// Proxy a retrieval query. Records the query, forwards to the retrieval
@@ -25,15 +25,7 @@ pub async fn retrieve(
         .clone()
         .ok_or_else(|| Error::Internal("no retrieval backend configured".into()))?;
 
-    let run_id = match extract_run_id(&headers) {
-        Some(id) => id,
-        None => {
-            state
-                .ledger
-                .create_run("gateway", json!({"origin": "retrieval_proxy"}))
-                .await?
-        }
-    };
+    let (run_id, _minted) = resolve_or_mint_run(&state, &headers, "retrieval_proxy").await?;
 
     // 1. Query event — record the raw input so callers can introspect whatever
     //    shape they sent (query string, filters, etc).

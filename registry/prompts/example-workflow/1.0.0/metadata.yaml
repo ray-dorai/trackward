@@ -1,0 +1,6 @@
+workflow: example-workflow
+version: "1.0.0"
+owner: ray
+description: >
+  Retrieval + summarization workflow used for the initial end-to-end demo.
+eval_set: example-workflow/1.0.0

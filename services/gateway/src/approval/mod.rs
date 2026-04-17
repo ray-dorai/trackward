@@ -12,7 +12,7 @@ use tokio::sync::{oneshot, Mutex};
 use uuid::{NoContext, Timestamp, Uuid};
 
 use crate::errors::Error;
-use crate::tool_proxy::provenance::{extract_run_id, RUN_ID_HEADER};
+use crate::tool_proxy::provenance::{resolve_or_mint_run, RUN_ID_HEADER};
 use crate::AppState;
 
 /// An in-memory store of pending approvals. Phase 4 will persist this.
@@ -46,15 +46,7 @@ pub async fn request(
     headers: HeaderMap,
     Json(body): Json<serde_json::Value>,
 ) -> Result<Response, Error> {
-    let run_id = match extract_run_id(&headers) {
-        Some(id) => id,
-        None => {
-            state
-                .ledger
-                .create_run("gateway", json!({"origin": "approval"}))
-                .await?
-        }
-    };
+    let (run_id, _minted) = resolve_or_mint_run(&state, &headers, "approval").await?;
 
     let approval_id = new_approval_id();
     let tool = body

@@ -1,5 +1,5 @@
 use gateway::config::Config;
-use gateway::{build_router, AppState};
+use gateway::{build_router_with_registry, AppState};
 
 #[tokio::main]
 async fn main() {
@@ -7,7 +7,7 @@ async fn main() {
 
     let config = Config::from_env();
     let state = AppState::new(config.clone());
-    let app = build_router(state);
+    let app = build_router_with_registry(state).await;
 
     let listener = tokio::net::TcpListener::bind(&config.listen_addr)
         .await

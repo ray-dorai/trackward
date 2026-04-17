@@ -17,6 +17,9 @@ pub enum Error {
 
     #[error("bad request: {0}")]
     BadRequest(String),
+
+    #[error("conflict: {0}")]
+    Conflict(String),
 }
 
 impl IntoResponse for Error {
@@ -27,6 +30,7 @@ impl IntoResponse for Error {
             Error::S3(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Error::HashMismatch { .. } => StatusCode::CONFLICT,
             Error::BadRequest(_) => StatusCode::BAD_REQUEST,
+            Error::Conflict(_) => StatusCode::CONFLICT,
         };
         let body = serde_json::json!({ "error": self.to_string() });
         (status, axum::Json(body)).into_response()

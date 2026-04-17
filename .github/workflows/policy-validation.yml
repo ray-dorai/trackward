@@ -1,0 +1,95 @@
+name: policy-validation
+
+# Static validation of registry/ YAML + schema. Fast feedback for typos and
+# missing required fields before anything is merged.
+
+on:
+  pull_request:
+    paths:
+      - "registry/**"
+      - ".github/workflows/policy-validation.yml"
+  push:
+    branches: [main]
+    paths:
+      - "registry/**"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install yq + jq
+        run: |
+          sudo snap install yq || sudo apt-get update && sudo apt-get install -y jq
+          if ! command -v yq >/dev/null; then
+            sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+            sudo chmod +x /usr/local/bin/yq
+          fi
+
+      - name: Validate policy YAML structure
+        run: |
+          fail=0
+          for f in registry/policies/*/*.yaml; do
+            echo "Validating $f"
+            for field in version scope limits; do
+              if ! yq -e ".$field" "$f" >/dev/null 2>&1; then
+                echo "::error file=$f::missing required field '$field'"
+                fail=1
+              fi
+            done
+          done
+          exit $fail
+
+      - name: Validate prompt metadata
+        run: |
+          fail=0
+          for dir in registry/prompts/*/*/; do
+            meta="${dir}metadata.yaml"
+            if [ ! -f "$meta" ]; then
+              echo "::error::missing metadata.yaml in $dir"
+              fail=1
+              continue
+            fi
+            for field in workflow version owner; do
+              if ! yq -e ".$field" "$meta" >/dev/null 2>&1; then
+                echo "::error file=$meta::missing required field '$field'"
+                fail=1
+              fi
+            done
+            # tool_policy.yaml is required per the prompt schema
+            if [ ! -f "${dir}tool_policy.yaml" ]; then
+              echo "::error file=$meta::missing tool_policy.yaml in ${dir}"
+              fail=1
+            fi
+            # output_schema.json must parse
+            if [ -f "${dir}output_schema.json" ]; then
+              if ! jq empty "${dir}output_schema.json" >/dev/null 2>&1; then
+                echo "::error file=${dir}output_schema.json::invalid JSON"
+                fail=1
+              fi
+            fi
+          done
+          exit $fail
+
+      - name: Validate eval manifests
+        run: |
+          fail=0
+          for f in registry/evals/*/*.yaml; do
+            echo "Validating $f"
+            for field in workflow version prompt_version datasets; do
+              if ! yq -e ".$field" "$f" >/dev/null 2>&1; then
+                echo "::error file=$f::missing required field '$field'"
+                fail=1
+              fi
+            done
+            # Every dataset path referenced must exist on disk.
+            workflow_dir="$(dirname "$f")"
+            for path in $(yq '.datasets[].path' "$f"); do
+              if [ ! -f "$workflow_dir/$path" ]; then
+                echo "::error file=$f::dataset path missing: $path"
+                fail=1
+              fi
+            done
+          done
+          exit $fail

@@ -1,0 +1,2 @@
+{"id": "hp-1", "input": "Summarize the retrieval results for 'postgres replication'.", "expected_contains": ["replication"]}
+{"id": "hp-2", "input": "Cite the doc that mentions WAL.", "expected_contains": ["WAL"]}

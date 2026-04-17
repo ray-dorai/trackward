@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::env;
+use std::path::PathBuf;
 
 #[derive(Clone, Debug)]
 pub struct Config {
@@ -12,6 +13,21 @@ pub struct Config {
     pub retrieval_backend: Option<String>,
     /// Tools that require human approval before proxying.
     pub gated_tools: Vec<String>,
+    /// Registry binding — which prompt/policy/eval this gateway stamps runs with.
+    pub registry: RegistryBinding,
+}
+
+/// Which prompt & policy (and, by extension, eval) version every run minted
+/// by this gateway gets tied to. All fields are optional; a gateway with an
+/// empty binding simply doesn't stamp runs (useful in tests and bring-up).
+#[derive(Clone, Debug, Default)]
+pub struct RegistryBinding {
+    pub registry_dir: Option<PathBuf>,
+    pub prompt_workflow: Option<String>,
+    pub prompt_version: Option<String>,
+    pub policy_scope: Option<String>,
+    pub policy_version: Option<String>,
+    pub git_sha: Option<String>,
 }
 
 impl Config {
@@ -26,6 +42,15 @@ impl Config {
             .map(|s| s.split(',').map(|t| t.trim().to_string()).collect())
             .unwrap_or_default();
 
+        let registry = RegistryBinding {
+            registry_dir: env::var("REGISTRY_DIR").ok().map(PathBuf::from),
+            prompt_workflow: env::var("PROMPT_WORKFLOW").ok(),
+            prompt_version: env::var("PROMPT_VERSION").ok(),
+            policy_scope: env::var("POLICY_SCOPE").ok(),
+            policy_version: env::var("POLICY_VERSION").ok(),
+            git_sha: env::var("GIT_SHA").ok(),
+        };
+
         Self {
             listen_addr: env::var("GATEWAY_LISTEN_ADDR")
                 .unwrap_or_else(|_| "0.0.0.0:4000".into()),
@@ -34,6 +59,7 @@ impl Config {
             tool_routes,
             retrieval_backend: env::var("RETRIEVAL_BACKEND").ok(),
             gated_tools,
+            registry,
         }
     }
 }
