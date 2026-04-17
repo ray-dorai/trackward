@@ -1,0 +1,79 @@
+name: prompt-regression
+
+# Run regression evals whenever a registered prompt or eval set changes.
+# The PR cannot merge if the eval gate fails on any registered workflow.
+
+on:
+  pull_request:
+    paths:
+      - "registry/prompts/**"
+      - "registry/evals/**"
+      - ".github/workflows/prompt-regression.yml"
+  push:
+    branches: [main]
+    paths:
+      - "registry/prompts/**"
+      - "registry/evals/**"
+
+jobs:
+  detect-changed-workflows:
+    runs-on: ubuntu-latest
+    outputs:
+      workflows: ${{ steps.find.outputs.workflows }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: find
+        name: Find changed workflow versions
+        run: |
+          base="${{ github.event.pull_request.base.sha || github.event.before }}"
+          head="${{ github.sha }}"
+          # Every prompt version lives under registry/prompts/<workflow>/<version>/.
+          # Any file change inside one of those dirs re-runs its eval set.
+          changed=$(git diff --name-only "$base" "$head" \
+            | awk -F/ '/^registry\/(prompts|evals)\//{ print $3 "/" $4 }' \
+            | sort -u \
+            | jq -R -s -c 'split("\n") | map(select(length>0))')
+          echo "workflows=$changed" >> "$GITHUB_OUTPUT"
+          echo "Changed workflow versions: $changed"
+
+  eval:
+    needs: detect-changed-workflows
+    if: ${{ needs.detect-changed-workflows.outputs.workflows != '[]' && needs.detect-changed-workflows.outputs.workflows != '' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ fromJson(needs.detect-changed-workflows.outputs.workflows) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Parse target
+        id: parse
+        run: |
+          workflow="${{ matrix.target }}"
+          echo "workflow=${workflow%%/*}" >> "$GITHUB_OUTPUT"
+          echo "version=${workflow##*/}" >> "$GITHUB_OUTPUT"
+
+      - name: Validate eval manifest exists
+        run: |
+          manifest="registry/evals/${{ steps.parse.outputs.workflow }}/${{ steps.parse.outputs.version }}.yaml"
+          if [ ! -f "$manifest" ]; then
+            echo "::error::missing eval manifest: $manifest"
+            exit 1
+          fi
+
+      # NOTE: Phase 3 leaves the actual eval runner as a placeholder. A later
+      # phase wires up the real grader (LLM judge / rules) that reads the
+      # manifest + datasets and posts a signed eval_result to the ledger.
+      - name: Run eval (placeholder)
+        env:
+          WORKFLOW: ${{ steps.parse.outputs.workflow }}
+          VERSION: ${{ steps.parse.outputs.version }}
+        run: |
+          echo "Would run eval for $WORKFLOW@$VERSION"
+          echo "Manifest:"
+          cat "registry/evals/$WORKFLOW/$VERSION.yaml"
+          echo "Datasets:"
+          ls "registry/evals/$WORKFLOW/datasets/" 2>/dev/null || true
