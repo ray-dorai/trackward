@@ -12,7 +12,7 @@ use uuid::Uuid;
 
 use crate::errors::Error;
 use crate::AppState;
-use provenance::{extract_run_id, RUN_ID_HEADER};
+use provenance::{resolve_or_mint_run, RUN_ID_HEADER};
 
 /// Proxy a tool call through the gateway.
 ///
@@ -35,15 +35,8 @@ pub async fn proxy(
         .clone();
 
     // 2. Resolve run_id: reuse or mint a new one via the ledger.
-    let run_id = match extract_run_id(&headers) {
-        Some(id) => id,
-        None => {
-            state
-                .ledger
-                .create_run("gateway", json!({"origin": "tool_proxy"}))
-                .await?
-        }
-    };
+    //    When we mint, we also stamp the run with the active registry binding.
+    let (run_id, _minted) = resolve_or_mint_run(&state, &headers, "tool_proxy").await?;
 
     // 3. Record the call before invoking the backend.
     state
