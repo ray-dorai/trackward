@@ -396,3 +396,130 @@ async fn cannot_update_or_delete_run_bindings() {
         .await;
     assert!(delete.is_err(), "DELETE on run_version_bindings must fail");
 }
+
+#[tokio::test]
+async fn cannot_update_or_delete_policy_versions() {
+    let base = spawn_server().await;
+    let config = Config::from_env();
+    let pool = ledger::db::connect(&config).await.unwrap();
+    let client = reqwest::Client::new();
+
+    let created: Value = client
+        .post(format!("{base}/policy-versions"))
+        .json(&json!({
+            "scope": "immutable-policy",
+            "version": "1.0.0",
+            "git_sha": "9".repeat(40),
+            "content_hash": "6".repeat(64),
+        }))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let id: uuid::Uuid = created["id"].as_str().unwrap().parse().unwrap();
+
+    let update = sqlx::query("UPDATE policy_versions SET scope = 'x' WHERE id = $1")
+        .bind(id)
+        .execute(&pool)
+        .await;
+    assert!(update.is_err(), "UPDATE on policy_versions must fail");
+
+    let delete = sqlx::query("DELETE FROM policy_versions WHERE id = $1")
+        .bind(id)
+        .execute(&pool)
+        .await;
+    assert!(delete.is_err(), "DELETE on policy_versions must fail");
+}
+
+#[tokio::test]
+async fn cannot_update_or_delete_eval_results() {
+    let base = spawn_server().await;
+    let config = Config::from_env();
+    let pool = ledger::db::connect(&config).await.unwrap();
+    let client = reqwest::Client::new();
+
+    let prompt: Value = client
+        .post(format!("{base}/prompt-versions"))
+        .json(&json!({
+            "workflow": "eval-immutable",
+            "version": "1.0.0",
+            "git_sha": "a".repeat(40),
+            "content_hash": "7".repeat(64),
+        }))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+
+    let created: Value = client
+        .post(format!("{base}/eval-results"))
+        .json(&json!({
+            "workflow": "eval-immutable",
+            "version": "1.0.0",
+            "prompt_version_id": prompt["id"],
+            "git_sha": "b".repeat(40),
+            "content_hash": "8".repeat(64),
+            "passed": true,
+        }))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let id: uuid::Uuid = created["id"].as_str().unwrap().parse().unwrap();
+
+    let update = sqlx::query("UPDATE eval_results SET passed = false WHERE id = $1")
+        .bind(id)
+        .execute(&pool)
+        .await;
+    assert!(update.is_err(), "UPDATE on eval_results must fail");
+
+    let delete = sqlx::query("DELETE FROM eval_results WHERE id = $1")
+        .bind(id)
+        .execute(&pool)
+        .await;
+    assert!(delete.is_err(), "DELETE on eval_results must fail");
+}
+
+#[tokio::test]
+async fn reregister_same_prompt_version_returns_existing_row() {
+    let base = spawn_server().await;
+    let client = reqwest::Client::new();
+
+    let body = json!({
+        "workflow": "idempotent-test",
+        "version": "1.0.0",
+        "git_sha": "c".repeat(40),
+        "content_hash": "9".repeat(64),
+    });
+
+    let first: Value = client
+        .post(format!("{base}/prompt-versions"))
+        .json(&body)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+
+    let second: Value = client
+        .post(format!("{base}/prompt-versions"))
+        .json(&body)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+
+    assert_eq!(
+        first["id"], second["id"],
+        "re-registering identical (workflow, version, content_hash) must return the same row"
+    );
+}

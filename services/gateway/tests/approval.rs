@@ -1,8 +1,10 @@
 mod common;
 
 use common::*;
+use gateway::config::RegistryBinding;
 use serde_json::json;
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::time::Duration;
 
 /// Helper: poll the ledger until a run has at least `n` events, or time out.
@@ -28,7 +30,7 @@ async fn approval_request_blocks_until_grant() {
         reqwest::Client::new()
             .post(format!("{gw_url}/approval/request"))
             .json(&json!({
-                "tool": "deploy",
+                "tool": "deploy-grant-test",
                 "reason": "ship v2 to prod",
             }))
             .send()
@@ -60,7 +62,7 @@ async fn approval_request_blocks_until_grant() {
         let events = get_events(&ledger_url, rid).await;
         if let Some(ev) = events
             .iter()
-            .find(|e| e["kind"] == "approval_requested" && e["body"]["tool"] == "deploy")
+            .find(|e| e["kind"] == "approval_requested" && e["body"]["tool"] == "deploy-grant-test")
         {
             approval_id = Some(ev["body"]["approval_id"].as_str().unwrap().to_string());
             target_run_id = Some(rid.to_string());
@@ -98,7 +100,7 @@ async fn approval_request_blocks_until_grant() {
     let events = wait_for_events(&ledger_url, &run_id, 2).await;
     assert_eq!(events.len(), 2, "expected 2 events, got {events:?}");
     assert_eq!(events[0]["kind"], "approval_requested");
-    assert_eq!(events[0]["body"]["tool"], "deploy");
+    assert_eq!(events[0]["body"]["tool"], "deploy-grant-test");
     assert_eq!(events[0]["body"]["approval_id"], approval_id);
     assert_eq!(events[1]["kind"], "approval_granted");
     assert_eq!(events[1]["body"]["approval_id"], approval_id);
@@ -174,4 +176,96 @@ async fn decide_on_unknown_approval_returns_404() {
         .await
         .unwrap();
     assert_eq!(resp.status(), 404);
+}
+
+#[tokio::test]
+async fn approval_grant_with_registry_binding_stamps_run() {
+    let ledger_url = spawn_ledger().await;
+
+    let registry_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("registry");
+    let binding = RegistryBinding {
+        registry_dir: Some(registry_dir),
+        prompt_workflow: Some("example-workflow".into()),
+        prompt_version: Some("1.0.0".into()),
+        policy_scope: Some("global".into()),
+        policy_version: Some("1.0.0".into()),
+        git_sha: Some("test-sha-approval".into()),
+    };
+
+    let gw = spawn_gateway_with_binding(
+        ledger_url.clone(),
+        HashMap::new(),
+        None,
+        vec![],
+        Some(binding),
+    )
+    .await;
+
+    let gw_url = gw.url.clone();
+    let req_task = tokio::spawn(async move {
+        reqwest::Client::new()
+            .post(format!("{gw_url}/approval/request"))
+            .json(&json!({"tool": "deploy", "reason": "with binding"}))
+            .send()
+            .await
+            .unwrap()
+    });
+
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    // Find the approval_id from ledger events
+    let runs: Vec<serde_json::Value> = reqwest::get(format!("{ledger_url}/runs"))
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let mut approval_id: Option<String> = None;
+    let mut run_id: Option<String> = None;
+    for run in &runs {
+        let rid = run["id"].as_str().unwrap();
+        let events = get_events(&ledger_url, rid).await;
+        if let Some(ev) = events
+            .iter()
+            .find(|e| e["kind"] == "approval_requested" && e["body"]["reason"] == "with binding")
+        {
+            approval_id = Some(ev["body"]["approval_id"].as_str().unwrap().to_string());
+            run_id = Some(rid.to_string());
+            break;
+        }
+    }
+    let approval_id = approval_id.expect("should find approval_requested event");
+    let run_id = run_id.unwrap();
+
+    // Grant it
+    reqwest::Client::new()
+        .post(format!("{}/approval/{approval_id}/decide", gw.url))
+        .json(&json!({"decision": "granted"}))
+        .send()
+        .await
+        .unwrap();
+
+    let resp = tokio::time::timeout(Duration::from_secs(2), req_task)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(resp.status(), 200);
+
+    // The run should have a version binding
+    let binding: serde_json::Value =
+        reqwest::get(format!("{ledger_url}/runs/{run_id}/bindings"))
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+    assert_eq!(binding["run_id"], run_id);
+    assert!(
+        binding["prompt_version_id"].is_string(),
+        "approval-minted run should carry prompt binding, got {binding:?}"
+    );
+    assert!(binding["policy_version_id"].is_string());
 }
