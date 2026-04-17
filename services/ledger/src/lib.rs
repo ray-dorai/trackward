@@ -32,6 +32,25 @@ pub fn build_router(state: AppState) -> Router {
         .route("/artifacts/{id}", get(routes::artifacts::get))
         .route("/artifacts/{id}/download", get(routes::artifacts::download))
         .route("/runs/{run_id}/artifacts", get(routes::artifacts::list_for_run))
+        .route(
+            "/prompt-versions",
+            post(routes::prompt_versions::create).get(routes::prompt_versions::list),
+        )
+        .route("/prompt-versions/{id}", get(routes::prompt_versions::get))
+        .route(
+            "/policy-versions",
+            post(routes::policy_versions::create).get(routes::policy_versions::list),
+        )
+        .route("/policy-versions/{id}", get(routes::policy_versions::get))
+        .route(
+            "/eval-results",
+            post(routes::eval_results::create).get(routes::eval_results::list),
+        )
+        .route("/eval-results/{id}", get(routes::eval_results::get))
+        .route(
+            "/runs/{run_id}/bindings",
+            post(routes::run_bindings::create).get(routes::run_bindings::get),
+        )
         .route("/health", get(health))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
