@@ -37,6 +37,7 @@ pub fn build_router(state: AppState) -> Router {
     Router::new()
         .route("/runs", post(routes::runs::create).get(routes::runs::list))
         .route("/runs/{id}", get(routes::runs::get))
+        .route("/runs/{id}/dossier", get(routes::runs::dossier))
         .route(
             "/runs/{run_id}/events",
             post(routes::events::append).get(routes::events::list),
@@ -108,6 +109,7 @@ pub fn build_router(state: AppState) -> Router {
             post(routes::cases::create),
         )
         .route("/cases/{id}", get(routes::cases::get))
+        .route("/cases/{id}/dossier", get(routes::cases::dossier))
         .route(
             "/cases/{case_id}/evidence",
             post(routes::case_evidence::link).get(routes::case_evidence::list),

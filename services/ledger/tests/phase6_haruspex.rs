@@ -167,8 +167,9 @@ async fn run_dossier_includes_all_evidence() {
         .post(format!("{base}/guardrails"))
         .json(&json!({
             "run_id": run_id,
-            "policy": "pii",
-            "decision": "allow",
+            "name": "pii",
+            "stage": "pre",
+            "outcome": "allow",
         }))
         .send()
         .await
