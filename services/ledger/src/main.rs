@@ -12,10 +12,7 @@ async fn main() {
         .expect("failed to connect to database");
     let blob_store = BlobStore::new(&config).await;
 
-    let state = AppState {
-        db: pool,
-        blob_store,
-    };
+    let state = AppState::new(pool, blob_store);
 
     let app = build_router(state);
 

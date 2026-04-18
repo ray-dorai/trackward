@@ -6,6 +6,7 @@ pub mod models;
 pub mod otel;
 pub mod routes;
 pub mod s3;
+pub mod signing;
 
 use axum::routing::{get, post};
 use axum::Router;
@@ -13,11 +14,23 @@ use sqlx::PgPool;
 use tower_http::trace::TraceLayer;
 
 use crate::s3::BlobStore;
+use crate::signing::SigningService;
 
 #[derive(Clone)]
 pub struct AppState {
     pub db: PgPool,
     pub blob_store: BlobStore,
+    pub signing: SigningService,
+}
+
+impl AppState {
+    pub fn new(db: PgPool, blob_store: BlobStore) -> Self {
+        Self {
+            db,
+            blob_store,
+            signing: SigningService::from_env(),
+        }
+    }
 }
 
 pub fn build_router(state: AppState) -> Router {
@@ -86,6 +99,24 @@ pub fn build_router(state: AppState) -> Router {
             "/runs/{run_id}/bias-slices",
             get(routes::bias_slices::list_for_run),
         )
+        .route(
+            "/custody-events",
+            post(routes::custody_events::create).get(routes::custody_events::list),
+        )
+        .route(
+            "/cases",
+            post(routes::cases::create),
+        )
+        .route("/cases/{id}", get(routes::cases::get))
+        .route(
+            "/cases/{case_id}/evidence",
+            post(routes::case_evidence::link).get(routes::case_evidence::list),
+        )
+        .route(
+            "/cases/{case_id}/exports",
+            post(routes::export_bundles::create),
+        )
+        .route("/export-bundles/{id}", get(routes::export_bundles::get))
         .route("/health", get(health))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
