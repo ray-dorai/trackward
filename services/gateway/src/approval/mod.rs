@@ -56,6 +56,7 @@ pub async fn request(
         .to_string();
 
     let (tx, rx) = oneshot::channel::<Decision>();
+    let requested_at = chrono::Utc::now();
 
     // Stash the pending approval *before* recording the event, so a very
     // fast decider never races ahead of our own bookkeeping.
@@ -93,12 +94,14 @@ pub async fn request(
         .await
         .map_err(|_| Error::Internal("approval channel closed before decision".into()))?;
 
-    // Record the outcome.
+    // Record the outcome as both an event (streaming) and a first-class
+    // human_approval row (evidence). The approval_id ties them together.
     let kind = if decision.granted {
         "approval_granted"
     } else {
         "approval_denied"
     };
+    let decision_label = if decision.granted { "granted" } else { "denied" };
     state
         .ledger
         .append_event(
@@ -111,6 +114,28 @@ pub async fn request(
             }),
         )
         .await?;
+
+    if let Err(e) = state
+        .ledger
+        .record_human_approval(
+            approval_id,
+            run_id,
+            &tool,
+            decision_label,
+            decision.reason.as_deref(),
+            requested_at,
+        )
+        .await
+    {
+        // Don't fail the caller's approval flow if the evidence row fails —
+        // the event was already written. Log loudly so it's visible.
+        tracing::warn!(
+            error = %e,
+            approval_id = %approval_id,
+            run_id = %run_id,
+            "failed to record human_approval row"
+        );
+    }
 
     let decision_str = if decision.granted { "granted" } else { "denied" };
     let body = json!({

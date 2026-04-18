@@ -66,16 +66,20 @@ pub async fn proxy(
     let body_value: serde_json::Value = serde_json::from_slice(&backend_body)
         .unwrap_or_else(|_| json!({ "raw": String::from_utf8_lossy(&backend_body).to_string() }));
 
-    // 5. Record result or error.
-    if backend_status.is_success() {
+    // 5. Record result or error as an event, and mirror the call as a
+    //    first-class tool_invocation row. Downstream side effects declared
+    //    by the backend are split into side_effect rows keyed to this
+    //    invocation — see side_effects::record_confirmations.
+    let (status_label, output_for_ti) = if backend_status.is_success() {
         state
             .ledger
             .append_event(
                 run_id,
                 "tool_result",
-                json!({ "tool": tool, "output": body_value }),
+                json!({ "tool": tool, "output": body_value.clone() }),
             )
             .await?;
+        ("ok", body_value.clone())
     } else {
         state
             .ledger
@@ -85,10 +89,29 @@ pub async fn proxy(
                 json!({
                     "tool": tool,
                     "status": backend_status.as_u16(),
-                    "body": body_value,
+                    "body": body_value.clone(),
                 }),
             )
             .await?;
+        ("error", body_value.clone())
+    };
+
+    let tool_invocation_id = state
+        .ledger
+        .record_tool_invocation(
+            run_id,
+            &tool,
+            &input,
+            &output_for_ti,
+            status_label,
+            Some(backend_status.as_u16()),
+        )
+        .await
+        .ok();
+
+    if backend_status.is_success() {
+        side_effects::record_confirmations(&state.ledger, run_id, tool_invocation_id, &body_value)
+            .await;
     }
 
     // 6. Return caller-facing response with run_id header.

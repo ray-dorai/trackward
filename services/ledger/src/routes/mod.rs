@@ -1,7 +1,12 @@
 pub mod artifacts;
+pub mod bias_slices;
 pub mod eval_results;
 pub mod events;
+pub mod guardrails;
+pub mod human_approvals;
 pub mod policy_versions;
 pub mod prompt_versions;
 pub mod run_bindings;
 pub mod runs;
+pub mod side_effects;
+pub mod tool_invocations;

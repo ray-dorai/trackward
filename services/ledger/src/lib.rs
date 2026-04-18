@@ -51,6 +51,41 @@ pub fn build_router(state: AppState) -> Router {
             "/runs/{run_id}/bindings",
             post(routes::run_bindings::create).get(routes::run_bindings::get),
         )
+        .route(
+            "/tool-invocations",
+            post(routes::tool_invocations::create),
+        )
+        .route(
+            "/tool-invocations/{id}",
+            get(routes::tool_invocations::get),
+        )
+        .route(
+            "/runs/{run_id}/tool-invocations",
+            get(routes::tool_invocations::list_for_run),
+        )
+        .route("/side-effects", post(routes::side_effects::create))
+        .route("/side-effects/{id}", get(routes::side_effects::get))
+        .route(
+            "/runs/{run_id}/side-effects",
+            get(routes::side_effects::list_for_run),
+        )
+        .route("/guardrails", post(routes::guardrails::create))
+        .route("/guardrails/{id}", get(routes::guardrails::get))
+        .route(
+            "/runs/{run_id}/guardrails",
+            get(routes::guardrails::list_for_run),
+        )
+        .route("/human-approvals", post(routes::human_approvals::create))
+        .route(
+            "/human-approvals/{id}",
+            get(routes::human_approvals::get),
+        )
+        .route("/bias-slices", post(routes::bias_slices::create))
+        .route("/bias-slices/{id}", get(routes::bias_slices::get))
+        .route(
+            "/runs/{run_id}/bias-slices",
+            get(routes::bias_slices::list_for_run),
+        )
         .route("/health", get(health))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
