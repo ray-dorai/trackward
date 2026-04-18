@@ -1,4 +1,5 @@
 pub mod approval;
+pub mod auth;
 pub mod config;
 pub mod errors;
 pub mod ledger_client;
@@ -33,8 +34,9 @@ impl AppState {
             config.ledger_url.clone(),
             config.service_account.clone(),
             config.ledger_client_tls.as_ref(),
+            config.ledger_token.as_deref(),
         )
-        .expect("failed to build ledger client (mTLS paths unreadable?)");
+        .expect("failed to build ledger client (mTLS paths unreadable or token invalid?)");
         Self {
             config: Arc::new(config),
             ledger,

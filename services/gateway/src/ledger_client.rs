@@ -20,17 +20,31 @@ pub struct LedgerClient {
     actor: String,
 }
 
-/// Build a reqwest client with client-certificate auth wired in, used when
-/// the ledger is configured to require mTLS. When `tls` is `None` this is
-/// equivalent to `reqwest::Client::new()` and keeps the plaintext path
-/// working unchanged.
+/// Build a reqwest client with client-certificate auth and/or a bearer
+/// token wired in. When both `tls` and `token` are `None` this is
+/// equivalent to `reqwest::Client::new()`, keeping the plaintext path
+/// working unchanged. When `token` is set, every request gains an
+/// `Authorization: Bearer <token>` header via reqwest default_headers.
 ///
 /// Failure is fatal at boot because a gateway that silently falls back to
 /// no-auth would hide a misconfigured deployment behind a "nothing works"
 /// symptom instead of a clear error.
-fn build_http_client(tls: Option<&LedgerClientTls>) -> Result<reqwest::Client, Error> {
+fn build_http_client(
+    tls: Option<&LedgerClientTls>,
+    token: Option<&str>,
+) -> Result<reqwest::Client, Error> {
+    let mut headers = reqwest::header::HeaderMap::new();
+    if let Some(token) = token {
+        let value = reqwest::header::HeaderValue::from_str(&format!("Bearer {token}"))
+            .map_err(|e| Error::Ledger(format!("invalid LEDGER_CLIENT_TOKEN: {e}")))?;
+        headers.insert(reqwest::header::AUTHORIZATION, value);
+    }
+
     let Some(tls) = tls else {
-        return Ok(reqwest::Client::new());
+        return reqwest::Client::builder()
+            .default_headers(headers)
+            .build()
+            .map_err(|e| Error::Ledger(format!("build ledger http client: {e}")));
     };
 
     let cert_pem = std::fs::read(&tls.cert_path).map_err(|e| {
@@ -67,6 +81,7 @@ fn build_http_client(tls: Option<&LedgerClientTls>) -> Result<reqwest::Client, E
         .use_rustls_tls()
         .identity(identity)
         .add_root_certificate(ca_cert)
+        .default_headers(headers)
         .build()
         .map_err(|e| Error::Ledger(format!("build mTLS client: {e}")))
 }
@@ -107,19 +122,20 @@ impl LedgerClient {
         }
     }
 
-    /// Build a LedgerClient that presents a client cert to the ledger. When
-    /// `tls` is `None` this degrades to `new` — gateways without
-    /// `LEDGER_CLIENT_*` env vars keep working as plaintext callers.
-    ///
-    /// Returns an error only if the PEM files can't be read or parsed; a
-    /// bad config should fail fast at startup rather than at first request.
+    /// Build a LedgerClient with optional mTLS client-cert and optional
+    /// bearer token. Both knobs are independently configurable; either,
+    /// both, or neither may be set. When `tls` is `None` and `token` is
+    /// `None` this is equivalent to `new`. Returns an error only if PEM
+    /// files can't be read/parsed or the token contains invalid header
+    /// bytes — bad config fails fast at startup, not on first request.
     pub fn with_optional_tls(
         base: impl Into<String>,
         actor: impl Into<String>,
         tls: Option<&LedgerClientTls>,
+        token: Option<&str>,
     ) -> Result<Self, Error> {
         Ok(Self {
-            http: build_http_client(tls)?,
+            http: build_http_client(tls, token)?,
             base: base.into(),
             actor: actor.into(),
         })

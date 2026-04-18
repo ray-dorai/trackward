@@ -1,6 +1,7 @@
 pub mod actor;
 pub mod anchoring;
 pub mod anchors;
+pub mod auth;
 pub mod chain;
 pub mod config;
 pub mod db;
@@ -13,6 +14,7 @@ pub mod s3;
 pub mod signing;
 pub mod tls;
 
+use axum::middleware;
 use axum::routing::{get, post};
 use axum::Router;
 use sqlx::PgPool;
@@ -40,6 +42,10 @@ pub struct AppState {
     /// stamps their writes with `value`. See `crate::actor` for the full
     /// rationale.
     pub default_actor: Option<String>,
+    /// Optional bearer token. When `Some`, every write-path route requires
+    /// `Authorization: Bearer <token>`; `None` disables the gate (dev/test
+    /// default). Resolved from `LEDGER_AUTH_TOKEN`.
+    pub auth_token: Option<String>,
 }
 
 impl AppState {
@@ -50,6 +56,7 @@ impl AppState {
             signing: SigningService::from_env(),
             anchor_sink: AnchorSink::Noop,
             default_actor: std::env::var("LEDGER_DEFAULT_ACTOR").ok(),
+            auth_token: std::env::var("LEDGER_AUTH_TOKEN").ok().filter(|s| !s.is_empty()),
         }
     }
 
@@ -67,10 +74,17 @@ impl AppState {
         self.anchor_sink = sink;
         self
     }
+
+    /// Override the bearer token. Tests use this to exercise both
+    /// gated and ungated configurations without touching env vars.
+    pub fn with_auth_token(mut self, token: Option<String>) -> Self {
+        self.auth_token = token;
+        self
+    }
 }
 
 pub fn build_router(state: AppState) -> Router {
-    Router::new()
+    let protected = Router::new()
         .route("/runs", post(routes::runs::create).get(routes::runs::list))
         .route("/runs/{id}", get(routes::runs::get))
         .route("/runs/{id}/dossier", get(routes::runs::dossier))
@@ -160,7 +174,14 @@ pub fn build_router(state: AppState) -> Router {
             get(routes::anchors::list).post(routes::anchors::trigger),
         )
         .route("/anchors/{id}", get(routes::anchors::get))
+        .route_layer(middleware::from_fn_with_state(
+            state.clone(),
+            auth::require_bearer,
+        ));
+
+    Router::new()
         .route("/health", get(health))
+        .merge(protected)
         .layer(TraceLayer::new_for_http())
         .with_state(state)
 }
