@@ -1,3 +1,4 @@
+pub mod auth;
 pub mod config;
 pub mod db;
 pub mod errors;
@@ -8,6 +9,7 @@ pub mod routes;
 pub mod s3;
 pub mod signing;
 
+use axum::middleware;
 use axum::routing::{get, post};
 use axum::Router;
 use sqlx::PgPool;
@@ -21,6 +23,7 @@ pub struct AppState {
     pub db: PgPool,
     pub blob_store: BlobStore,
     pub signing: SigningService,
+    pub auth_token: Option<String>,
 }
 
 impl AppState {
@@ -29,12 +32,18 @@ impl AppState {
             db,
             blob_store,
             signing: SigningService::from_env(),
+            auth_token: std::env::var("LEDGER_AUTH_TOKEN").ok().filter(|s| !s.is_empty()),
         }
+    }
+
+    pub fn with_auth_token(mut self, token: Option<String>) -> Self {
+        self.auth_token = token;
+        self
     }
 }
 
 pub fn build_router(state: AppState) -> Router {
-    Router::new()
+    let protected = Router::new()
         .route("/runs", post(routes::runs::create).get(routes::runs::list))
         .route("/runs/{id}", get(routes::runs::get))
         .route("/runs/{id}/dossier", get(routes::runs::dossier))
@@ -119,7 +128,14 @@ pub fn build_router(state: AppState) -> Router {
             post(routes::export_bundles::create),
         )
         .route("/export-bundles/{id}", get(routes::export_bundles::get))
+        .route_layer(middleware::from_fn_with_state(
+            state.clone(),
+            auth::require_bearer,
+        ));
+
+    Router::new()
         .route("/health", get(health))
+        .merge(protected)
         .layer(TraceLayer::new_for_http())
         .with_state(state)
 }
