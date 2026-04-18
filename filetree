@@ -1,44 +1,56 @@
-agent-forensics/
-  Cargo.toml                          # workspace
-  docker-compose.yml
+trackward/                            # audit-ready agent logging for full traceability
+  Cargo.toml                          # workspace: ledger, gateway, verifier
+  docker-compose.yml                  # postgres, minio, otel-collector, jaeger
   .env.example
   Makefile
+  build-order
 
   services/
-    ledger/
+    ledger/                           # append-only system of record — the audit log
       Cargo.toml
       src/
         main.rs
         config.rs
+        db.rs                         # postgres connection with retry
+        hash.rs                       # sha-256 content addressing
+        s3.rs                         # minio/s3 blob store
+        signing.rs                    # cryptographic signing for tamper-evident exports
+        otel.rs                       # optional OTLP tracing export
+        errors.rs
         routes/
           mod.rs
           runs.rs
           events.rs
           artifacts.rs
-          custody.rs
-          cases.rs
-          exports.rs
+          prompt_versions.rs
+          policy_versions.rs
+          eval_results.rs
+          run_bindings.rs
+          tool_invocations.rs         # what the agent called and what came back
+          side_effects.rs             # what actually changed in the world
+          guardrails.rs               # which safety checks ran and what they found
+          human_approvals.rs          # who approved what and when
+          bias_slices.rs              # fairness audit breakdowns per demographic
+          custody.rs                  # chain of custody — who accessed what evidence
+          cases.rs                    # investigation cases linking runs to findings
+          exports.rs                  # signed, portable audit bundles
         models/
           mod.rs
           run.rs
           event.rs
           artifact.rs
+          prompt_version.rs
+          policy_version.rs
+          eval_result.rs
+          run_version_binding.rs
           tool_invocation.rs
           side_effect.rs
           guardrail.rs
           human_approval.rs
-          prompt_version.rs
-          policy_version.rs
-          eval_result.rs
           bias_slice.rs
           custody_event.rs
           case.rs
           export_bundle.rs
-        db.rs
-        hash.rs
-        signing.rs
-        s3.rs
-        errors.rs
       migrations/
         0001_runs_events_artifacts.sql
         0002_tool_and_side_effects.sql
@@ -49,27 +61,29 @@ agent-forensics/
         0007_cases.sql
         0008_exports.sql
 
-    gateway/
+    gateway/                          # intercepts every agent action for the audit trail
       Cargo.toml
       src/
         main.rs
         config.rs
         routes.rs
+        ledger_client.rs              # typed HTTP client for the ledger API
+        registry.rs                   # hash + resolve registry versions at startup
+        otel.rs                       # optional OTLP tracing export
+        errors.rs
         tool_proxy/
-          mod.rs
-          routing.rs
-          provenance.rs
-          side_effects.rs
+          mod.rs                      # proxy tool calls, record call + result
+          routing.rs                  # tool name -> backend URL resolution
+          provenance.rs               # run_id header, mint-or-reuse, bind versions
+          side_effects.rs             # log what the tool actually changed downstream
         retrieval_proxy/
-          mod.rs
+          mod.rs                      # proxy retrieval, store docs as artifacts
           logging.rs
         approval/
-          mod.rs
-          gates.rs
-        otel.rs
-        errors.rs
+          mod.rs                      # blocking approval gate (oneshot pattern)
+          gates.rs                    # which tools require approval
 
-  registry/
+  registry/                           # git-pinned prompts, policies, evals — every run traces back here
     prompts/
       example-workflow/
         1.0.0/
@@ -89,6 +103,14 @@ agent-forensics/
           refusal_cases.jsonl
           bias_slices.jsonl
 
+  tools/
+    verifier/                         # independent auditor: verify any export bundle is intact
+      Cargo.toml
+      src/
+        main.rs
+        verify.rs
+        manifest.rs
+
   infra/
     otel/
       otel-collector.yaml
@@ -96,14 +118,6 @@ agent-forensics/
       s3-object-lock.tf
       kms.tf
       iam.tf
-
-  tools/
-    verifier/
-      Cargo.toml
-      src/
-        main.rs
-        verify.rs
-        manifest.rs
 
   .github/
     workflows/
