@@ -31,6 +31,11 @@ struct IdRow {
     id: Uuid,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct ToolInvocationResponse {
+    pub id: Uuid,
+}
+
 impl LedgerClient {
     pub fn new(base: impl Into<String>) -> Self {
         Self {
@@ -182,6 +187,114 @@ impl LedgerClient {
         if !resp.status().is_success() {
             return Err(Error::Ledger(format!(
                 "bind_run {} {}",
+                resp.status(),
+                resp.text().await.unwrap_or_default()
+            )));
+        }
+        Ok(())
+    }
+
+    /// Record a tool_invocation row. Returns the id so the caller can link
+    /// downstream side_effects to it.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn record_tool_invocation(
+        &self,
+        run_id: Uuid,
+        tool: &str,
+        input: &serde_json::Value,
+        output: &serde_json::Value,
+        status: &str,
+        status_code: Option<u16>,
+    ) -> Result<Uuid, Error> {
+        let resp = self
+            .http
+            .post(format!("{}/tool-invocations", self.base))
+            .json(&serde_json::json!({
+                "run_id": run_id,
+                "tool": tool,
+                "input": input,
+                "output": output,
+                "status": status,
+                "status_code": status_code,
+            }))
+            .send()
+            .await
+            .map_err(|e| Error::Ledger(e.to_string()))?;
+        if !resp.status().is_success() {
+            return Err(Error::Ledger(format!(
+                "record_tool_invocation {} {}",
+                resp.status(),
+                resp.text().await.unwrap_or_default()
+            )));
+        }
+        let row: ToolInvocationResponse =
+            resp.json().await.map_err(|e| Error::Ledger(e.to_string()))?;
+        Ok(row.id)
+    }
+
+    pub async fn record_side_effect(
+        &self,
+        run_id: Uuid,
+        tool_invocation_id: Option<Uuid>,
+        kind: &str,
+        target: &str,
+        status: &str,
+        confirmation: &serde_json::Value,
+    ) -> Result<(), Error> {
+        let resp = self
+            .http
+            .post(format!("{}/side-effects", self.base))
+            .json(&serde_json::json!({
+                "run_id": run_id,
+                "tool_invocation_id": tool_invocation_id,
+                "kind": kind,
+                "target": target,
+                "status": status,
+                "confirmation": confirmation,
+            }))
+            .send()
+            .await
+            .map_err(|e| Error::Ledger(e.to_string()))?;
+        if !resp.status().is_success() {
+            return Err(Error::Ledger(format!(
+                "record_side_effect {} {}",
+                resp.status(),
+                resp.text().await.unwrap_or_default()
+            )));
+        }
+        Ok(())
+    }
+
+    /// Write a completed approval (decision already made). The `id` must be
+    /// the same approval_id the gateway minted at request time so event log
+    /// and row share a key.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn record_human_approval(
+        &self,
+        id: Uuid,
+        run_id: Uuid,
+        tool: &str,
+        decision: &str,
+        reason: Option<&str>,
+        requested_at: chrono::DateTime<chrono::Utc>,
+    ) -> Result<(), Error> {
+        let resp = self
+            .http
+            .post(format!("{}/human-approvals", self.base))
+            .json(&serde_json::json!({
+                "id": id,
+                "run_id": run_id,
+                "tool": tool,
+                "decision": decision,
+                "reason": reason,
+                "requested_at": requested_at,
+            }))
+            .send()
+            .await
+            .map_err(|e| Error::Ledger(e.to_string()))?;
+        if !resp.status().is_success() {
+            return Err(Error::Ledger(format!(
+                "record_human_approval {} {}",
                 resp.status(),
                 resp.text().await.unwrap_or_default()
             )));
