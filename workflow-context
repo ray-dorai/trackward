@@ -1,0 +1,104 @@
+User / App
+                            │
+                            ▼
+                        ┌────────────────────────────┐
+                        │         Gateway             │
+                        │                            │
+                        │  ┌──────────────────────┐  │
+                        │  │ Tool Proxy            │  │
+                        │  │ Retrieval Proxy       │  │
+                        │  │ Approval Gate         │  │
+                        │  │ Version Stamp         │  │
+                        │  └──────────────────────┘  │
+                        └────────────┬───────────────┘
+                                     │
+                 ┌───────────────────┼───────────────────────┐
+                 │                   │                       │
+                 ▼                   ▼                       ▼
+          Codex / Claude Code   Tool Proxy              Retrieval Proxy
+                 │               │       │               │
+                 │               ▼       ▼               ▼
+                 │          External   Downstream     RAG / Internal
+                 │          Systems    Confirmations   Doc Stores
+                 │               │       │               │
+                 │               └───┬───┘               │
+                 │                   │                    │
+                 │  (OTel)          │                    │
+                 ▼                   ▼                    ▼
+          ┌──────────────┐     ┌─────────────────────────────────┐
+          │    OTel       │────►│                                 │
+          │  Collector    │     │            Ledger               │
+          └──────────────┘     │                                 │
+                               │  Runs                           │
+                 ┌────────────►│  Events                         │
+                 │             │  Artifacts + Digests            │
+           Approval Gate       │  Tool Invocations               │
+              │                │  Side Effect Confirmations      │
+              ▼                │  Guardrail Events               │
+           Human               │  Human Approvals                │
+                               │  Prompt Bundle Versions         │
+                               │  Policy Versions                │
+                               │  Eval Results                   │
+                               │  Bias Slice Tags                │
+                               │  Custody Events                 │
+                               │  Cases                          │
+                               │  Export Bundles                  │
+                               │                                 │
+                               └──────────┬──────────────────────┘
+                                          │
+                              ┌───────────┼───────────┐
+                              │           │           │
+                              ▼           ▼           ▼
+                          Postgres    S3 Object    KMS / Cosign
+                         (append-     Lock        (signing)
+                          only)     (immutable
+                                     blobs)
+
+
+          ┌──────────────────────────────────────────────┐
+          │              Registry (Git)                  │
+          │                                              │
+          │  prompts/        policies/       evals/      │
+          │    workflow-a/     global/         workflow-a/│
+          │      1.0.0/          1.0.0.yaml     1.0.0/   │
+          │      1.1.0/                         datasets/│
+          │                                              │
+          └──────────────────┬───────────────────────────┘
+                             │
+                             ▼
+          ┌──────────────────────────────────────────────┐
+          │           GitHub Actions CI/CD               │
+          │                                              │
+          │  prompt-regression.yml ──► Promptfoo         │
+          │  policy-validation.yml                       │
+          │  test.yml                                    │
+          │  deploy.yml ──► stamps deployment ID,        │
+          │                 commit SHA, bundle version   │
+          └──────────────────────────────────────────────┘
+
+
+          ┌──────────────────────────────────────────────┐
+          │      Developer Observability (mirror)        │
+          │                                              │
+          │  Langfuse / Phoenix / Opik                   │
+          │                                              │
+          │  Fed by OTel Collector                       │
+          │  For engineering debugging only              │
+          │  Not the system of record                    │
+          └──────────────────────────────────────────────┘
+
+
+          ┌──────────────────────────────────────────────┐
+          │            Post-Incident                     │
+          │                                              │
+          │  Haruspex ──► Ledger (cases, annotations,    │
+          │               findings, reviews)             │
+          │                                              │
+          │  Export Packager ──► signed bundle            │
+          │                     ──► S3 Object Lock       │
+          │                                              │
+          │  Verifier CLI ──► checks hashes, signatures, │
+          │                   manifest integrity         │
+          │                                              │
+          │  Court / Regulator / NTSB ──► signed bundle  │
+          └──────────────────────────────────────────────┘
