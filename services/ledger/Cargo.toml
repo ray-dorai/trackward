@@ -23,10 +23,16 @@ aws-config = { workspace = true }
 aws-sdk-s3 = { workspace = true }
 thiserror = { workspace = true }
 hex = { workspace = true }
+ed25519-dalek = { workspace = true }
+rand = { workspace = true }
+rand_core = { workspace = true }
 
 [dev-dependencies]
 reqwest = { workspace = true }
 tokio = { workspace = true }
 uuid = { workspace = true }
 sqlx = { workspace = true }
+sha2 = { workspace = true }
 dotenvy = "0.15"
+ed25519-dalek = { workspace = true }
+hex = { workspace = true }
