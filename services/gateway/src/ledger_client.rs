@@ -44,6 +44,27 @@ impl LedgerClient {
         }
     }
 
+    /// Like `new`, but pre-configures the client to send
+    /// `Authorization: Bearer <token>` on every request. Used when the
+    /// ledger has `LEDGER_AUTH_TOKEN` set.
+    pub fn with_token(base: impl Into<String>, token: Option<String>) -> Self {
+        let Some(token) = token else {
+            return Self::new(base);
+        };
+        let mut headers = reqwest::header::HeaderMap::new();
+        let value = reqwest::header::HeaderValue::from_str(&format!("Bearer {token}"))
+            .expect("ledger token contains invalid header bytes");
+        headers.insert(reqwest::header::AUTHORIZATION, value);
+        let http = reqwest::Client::builder()
+            .default_headers(headers)
+            .build()
+            .expect("failed to build ledger http client");
+        Self {
+            http,
+            base: base.into(),
+        }
+    }
+
     pub async fn create_run(&self, agent: &str, metadata: serde_json::Value) -> Result<Uuid, Error> {
         let resp = self
             .http

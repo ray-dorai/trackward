@@ -13,6 +13,10 @@ async fn main() {
     let blob_store = BlobStore::new(&config).await;
 
     let state = AppState::new(pool, blob_store);
+    tracing::info!(
+        key_id = %state.signing.key_id,
+        "ledger signing key loaded — pin this in verifiers"
+    );
 
     let app = build_router(state);
 

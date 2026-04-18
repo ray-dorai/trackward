@@ -1,4 +1,5 @@
 pub mod approval;
+pub mod auth;
 pub mod config;
 pub mod errors;
 pub mod ledger_client;
@@ -28,7 +29,7 @@ pub struct AppState {
 
 impl AppState {
     pub fn new(config: Config) -> Self {
-        let ledger = LedgerClient::new(config.ledger_url.clone());
+        let ledger = LedgerClient::with_token(config.ledger_url.clone(), config.ledger_token.clone());
         Self {
             config: Arc::new(config),
             ledger,

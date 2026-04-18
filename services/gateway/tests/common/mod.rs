@@ -107,6 +107,8 @@ pub async fn spawn_gateway_with_binding(
         retrieval_backend,
         gated_tools,
         registry: binding.unwrap_or_default(),
+        auth_token: None,
+        ledger_token: None,
     };
     let state = AppState::new(config);
     let app = build_router_with_registry(state).await;
