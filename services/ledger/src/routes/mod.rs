@@ -1,7 +1,11 @@
 pub mod artifacts;
 pub mod bias_slices;
+pub mod case_evidence;
+pub mod cases;
+pub mod custody_events;
 pub mod eval_results;
 pub mod events;
+pub mod export_bundles;
 pub mod guardrails;
 pub mod human_approvals;
 pub mod policy_versions;

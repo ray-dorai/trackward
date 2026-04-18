@@ -70,10 +70,7 @@ pub async fn spawn_ledger() -> String {
     let config = ledger::config::Config::from_env();
     let pool = ledger::db::connect(&config).await.expect("ledger db connect");
     let blob_store = ledger::s3::BlobStore::new(&config).await;
-    let app = ledger::build_router(ledger::AppState {
-        db: pool,
-        blob_store,
-    });
+    let app = ledger::build_router(ledger::AppState::new(pool, blob_store));
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     tokio::spawn(async move {

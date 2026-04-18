@@ -1,7 +1,11 @@
 pub mod artifact;
 pub mod bias_slice;
+pub mod case;
+pub mod case_evidence;
+pub mod custody_event;
 pub mod eval_result;
 pub mod event;
+pub mod export_bundle;
 pub mod guardrail;
 pub mod human_approval;
 pub mod policy_version;
@@ -13,8 +17,12 @@ pub mod tool_invocation;
 
 pub use artifact::Artifact;
 pub use bias_slice::{BiasSlice, CreateBiasSlice};
+pub use case::{Case, CreateCase};
+pub use case_evidence::{CaseEvidence, CreateCaseEvidence};
+pub use custody_event::{CreateCustodyEvent, CustodyEvent};
 pub use eval_result::{CreateEvalResult, EvalResult};
 pub use event::{CreateEvent, Event};
+pub use export_bundle::{CreateExportBundle, ExportBundle};
 pub use guardrail::{CreateGuardrail, Guardrail};
 pub use human_approval::{CreateHumanApproval, HumanApproval};
 pub use policy_version::{CreatePolicyVersion, PolicyVersion};
