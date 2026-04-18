@@ -3,9 +3,25 @@ name = "verifier"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "verifier"
+path = "src/main.rs"
+
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 hex = { workspace = true }
 ed25519-dalek = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+ed25519-dalek = { workspace = true }
+hex = { workspace = true }
+rand = { workspace = true }
+rand_core = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
