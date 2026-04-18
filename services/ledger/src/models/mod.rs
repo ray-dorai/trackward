@@ -1,15 +1,25 @@
 pub mod artifact;
-pub mod event;
+pub mod bias_slice;
 pub mod eval_result;
+pub mod event;
+pub mod guardrail;
+pub mod human_approval;
 pub mod policy_version;
 pub mod prompt_version;
 pub mod run;
 pub mod run_version_binding;
+pub mod side_effect;
+pub mod tool_invocation;
 
 pub use artifact::Artifact;
+pub use bias_slice::{BiasSlice, CreateBiasSlice};
 pub use eval_result::{CreateEvalResult, EvalResult};
 pub use event::{CreateEvent, Event};
+pub use guardrail::{CreateGuardrail, Guardrail};
+pub use human_approval::{CreateHumanApproval, HumanApproval};
 pub use policy_version::{CreatePolicyVersion, PolicyVersion};
 pub use prompt_version::{CreatePromptVersion, PromptVersion};
 pub use run::{CreateRun, Run};
 pub use run_version_binding::{CreateRunVersionBinding, RunVersionBinding};
+pub use side_effect::{CreateSideEffect, SideEffect};
+pub use tool_invocation::{CreateToolInvocation, ToolInvocation};
