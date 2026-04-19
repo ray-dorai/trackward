@@ -11,6 +11,7 @@ pub struct Case {
     pub opened_by: String,
     pub opened_at: DateTime<Utc>,
     pub metadata: serde_json::Value,
+    pub actor_id: String,
     pub created_at: DateTime<Utc>,
 }
 

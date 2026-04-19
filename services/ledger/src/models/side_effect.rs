@@ -13,6 +13,7 @@ pub struct SideEffect {
     pub status: String,
     pub confirmation: serde_json::Value,
     pub observed_at: DateTime<Utc>,
+    pub actor_id: String,
     pub created_at: DateTime<Utc>,
 }
 

@@ -10,6 +10,7 @@ pub struct RunVersionBinding {
     pub policy_version_id: Option<Uuid>,
     pub eval_result_id: Option<Uuid>,
     pub bound_at: DateTime<Utc>,
+    pub actor_id: String,
 }
 
 #[derive(Debug, Deserialize)]

@@ -3,20 +3,22 @@ use axum::Json;
 use serde::Deserialize;
 use uuid::Uuid;
 
+use crate::actor::Actor;
 use crate::errors::Error;
 use crate::models::{CreateCustodyEvent, CustodyEvent};
 use crate::AppState;
 
 pub async fn create(
     State(state): State<AppState>,
+    actor: Actor,
     Json(input): Json<CreateCustodyEvent>,
 ) -> Result<Json<CustodyEvent>, Error> {
     let id = Uuid::now_v7();
     let row = sqlx::query_as::<_, CustodyEvent>(
         "INSERT INTO custody_events
             (id, evidence_type, evidence_id, action, actor, reason,
-             occurred_at, metadata)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+             occurred_at, metadata, actor_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
          RETURNING *",
     )
     .bind(id)
@@ -27,6 +29,7 @@ pub async fn create(
     .bind(input.reason.as_deref())
     .bind(input.occurred_at)
     .bind(&input.metadata)
+    .bind(&actor.0)
     .fetch_one(&state.db)
     .await?;
 

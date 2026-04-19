@@ -2,12 +2,14 @@ use axum::extract::{Path, State};
 use axum::Json;
 use uuid::Uuid;
 
+use crate::actor::Actor;
 use crate::errors::Error;
 use crate::models::{CreateEvent, Event};
 use crate::AppState;
 
 pub async fn append(
     State(state): State<AppState>,
+    actor: Actor,
     Path(run_id): Path<Uuid>,
     Json(input): Json<CreateEvent>,
 ) -> Result<Json<Event>, Error> {
@@ -33,8 +35,8 @@ pub async fn append(
 
     let id = Uuid::now_v7();
     let event = sqlx::query_as::<_, Event>(
-        "INSERT INTO events (id, run_id, seq, kind, body, occurred_at)
-         SELECT $1, $2, COALESCE(MAX(seq), 0) + 1, $3, $4, $5 FROM events WHERE run_id = $2
+        "INSERT INTO events (id, run_id, seq, kind, body, occurred_at, actor_id)
+         SELECT $1, $2, COALESCE(MAX(seq), 0) + 1, $3, $4, $5, $6 FROM events WHERE run_id = $2
          RETURNING *",
     )
     .bind(id)
@@ -42,6 +44,7 @@ pub async fn append(
     .bind(&input.kind)
     .bind(&input.body)
     .bind(input.occurred_at)
+    .bind(&actor.0)
     .fetch_one(&mut *tx)
     .await?;
 
@@ -52,6 +55,7 @@ pub async fn append(
         run_id = %run_id,
         seq = event.seq,
         kind = %event.kind,
+        actor_id = %event.actor_id,
         "event appended"
     );
     Ok(Json(event))

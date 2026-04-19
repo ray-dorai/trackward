@@ -28,7 +28,7 @@ pub struct AppState {
 
 impl AppState {
     pub fn new(config: Config) -> Self {
-        let ledger = LedgerClient::new(config.ledger_url.clone());
+        let ledger = LedgerClient::new(config.ledger_url.clone(), config.service_account.clone());
         Self {
             config: Arc::new(config),
             ledger,

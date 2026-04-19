@@ -2,19 +2,21 @@ use axum::extract::{Path, State};
 use axum::Json;
 use uuid::Uuid;
 
+use crate::actor::Actor;
 use crate::errors::Error;
 use crate::models::{CreateHumanApproval, HumanApproval};
 use crate::AppState;
 
 pub async fn create(
     State(state): State<AppState>,
+    actor: Actor,
     Json(input): Json<CreateHumanApproval>,
 ) -> Result<Json<HumanApproval>, Error> {
     let row = sqlx::query_as::<_, HumanApproval>(
         "INSERT INTO human_approvals
             (id, run_id, tool, decision, reason, decided_by,
-             requested_at, decided_at, metadata)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+             requested_at, decided_at, metadata, actor_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
          RETURNING *",
     )
     .bind(input.id)
@@ -26,6 +28,7 @@ pub async fn create(
     .bind(input.requested_at)
     .bind(input.decided_at)
     .bind(&input.metadata)
+    .bind(&actor.0)
     .fetch_one(&state.db)
     .await
     .map_err(|e| match e {

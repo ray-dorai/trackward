@@ -13,6 +13,7 @@ pub struct Guardrail {
     pub outcome: String,
     pub detail: serde_json::Value,
     pub evaluated_at: DateTime<Utc>,
+    pub actor_id: String,
     pub created_at: DateTime<Utc>,
 }
 

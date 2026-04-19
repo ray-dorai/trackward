@@ -14,6 +14,7 @@ pub struct EvalResult {
     pub passed: bool,
     pub summary: serde_json::Value,
     pub ran_at: DateTime<Utc>,
+    pub actor_id: String,
     pub created_at: DateTime<Utc>,
 }
 

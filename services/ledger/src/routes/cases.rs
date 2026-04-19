@@ -3,19 +3,21 @@ use axum::Json;
 use serde_json::{json, Value};
 use uuid::Uuid;
 
+use crate::actor::Actor;
 use crate::errors::Error;
 use crate::models::{Case, CaseEvidence, CreateCase};
 use crate::AppState;
 
 pub async fn create(
     State(state): State<AppState>,
+    actor: Actor,
     Json(input): Json<CreateCase>,
 ) -> Result<Json<Case>, Error> {
     let id = Uuid::now_v7();
     let row = sqlx::query_as::<_, Case>(
         "INSERT INTO cases
-            (id, title, description, opened_by, opened_at, metadata)
-         VALUES ($1, $2, $3, $4, $5, $6)
+            (id, title, description, opened_by, opened_at, metadata, actor_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
          RETURNING *",
     )
     .bind(id)
@@ -24,6 +26,7 @@ pub async fn create(
     .bind(&input.opened_by)
     .bind(input.opened_at)
     .bind(&input.metadata)
+    .bind(&actor.0)
     .fetch_one(&state.db)
     .await?;
 

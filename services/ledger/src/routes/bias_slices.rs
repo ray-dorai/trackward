@@ -2,12 +2,14 @@ use axum::extract::{Path, State};
 use axum::Json;
 use uuid::Uuid;
 
+use crate::actor::Actor;
 use crate::errors::Error;
 use crate::models::{BiasSlice, CreateBiasSlice};
 use crate::AppState;
 
 pub async fn create(
     State(state): State<AppState>,
+    actor: Actor,
     Json(input): Json<CreateBiasSlice>,
 ) -> Result<Json<BiasSlice>, Error> {
     // The CHECK constraint catches (NULL, NULL) at the DB layer — reject it
@@ -21,8 +23,8 @@ pub async fn create(
     let id = Uuid::now_v7();
     let row = sqlx::query_as::<_, BiasSlice>(
         "INSERT INTO bias_slices
-            (id, run_id, eval_result_id, label, value, score, metadata)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
+            (id, run_id, eval_result_id, label, value, score, metadata, actor_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          RETURNING *",
     )
     .bind(id)
@@ -32,6 +34,7 @@ pub async fn create(
     .bind(input.value.as_deref())
     .bind(input.score)
     .bind(&input.metadata)
+    .bind(&actor.0)
     .fetch_one(&state.db)
     .await?;
 

@@ -11,6 +11,7 @@ pub struct CaseEvidence {
     pub linked_by: String,
     pub linked_at: DateTime<Utc>,
     pub note: Option<String>,
+    pub actor_id: String,
     pub created_at: DateTime<Utc>,
 }
 

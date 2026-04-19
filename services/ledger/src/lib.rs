@@ -1,3 +1,4 @@
+pub mod actor;
 pub mod config;
 pub mod db;
 pub mod errors;
@@ -21,6 +22,12 @@ pub struct AppState {
     pub db: PgPool,
     pub blob_store: BlobStore,
     pub signing: SigningService,
+    /// Fallback actor_id used when a write arrives without an
+    /// `X-Trackward-Actor` header. `None` makes the header strictly required
+    /// (production). `Some(value)` permits legacy/unadorned callers and
+    /// stamps their writes with `value`. See `crate::actor` for the full
+    /// rationale.
+    pub default_actor: Option<String>,
 }
 
 impl AppState {
@@ -29,7 +36,16 @@ impl AppState {
             db,
             blob_store,
             signing: SigningService::from_env(),
+            default_actor: std::env::var("LEDGER_DEFAULT_ACTOR").ok(),
         }
+    }
+
+    /// Override the default_actor resolved from the environment. Test
+    /// harnesses use this to either force strict mode (`None`) or pin a
+    /// known actor string so assertions don't depend on env state.
+    pub fn with_default_actor(mut self, actor: Option<String>) -> Self {
+        self.default_actor = actor;
+        self
     }
 }
 

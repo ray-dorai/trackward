@@ -2,19 +2,21 @@ use axum::extract::{Path, State};
 use axum::Json;
 use uuid::Uuid;
 
+use crate::actor::Actor;
 use crate::errors::Error;
 use crate::models::{CaseEvidence, CreateCaseEvidence};
 use crate::AppState;
 
 pub async fn link(
     State(state): State<AppState>,
+    actor: Actor,
     Path(case_id): Path<Uuid>,
     Json(input): Json<CreateCaseEvidence>,
 ) -> Result<Json<CaseEvidence>, Error> {
     let row = sqlx::query_as::<_, CaseEvidence>(
         "INSERT INTO case_evidence
-            (case_id, evidence_type, evidence_id, linked_by, linked_at, note)
-         VALUES ($1, $2, $3, $4, $5, $6)
+            (case_id, evidence_type, evidence_id, linked_by, linked_at, note, actor_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
          RETURNING *",
     )
     .bind(case_id)
@@ -23,6 +25,7 @@ pub async fn link(
     .bind(&input.linked_by)
     .bind(input.linked_at)
     .bind(input.note.as_deref())
+    .bind(&actor.0)
     .fetch_one(&state.db)
     .await
     .map_err(|e| match e {

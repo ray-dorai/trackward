@@ -62,7 +62,20 @@ pub async fn spawn_mock_backend(response: Value) -> (String, MockBackend) {
 }
 
 /// Spawn a real ledger process against the docker-compose Postgres + MinIO.
+///
+/// The test harness runs the ledger with a pinned `default_actor` of
+/// `"test"` so existing tests that write directly (without setting
+/// `X-Trackward-Actor`) still succeed. Tests that need to exercise the
+/// strict-mode (header-required) path spawn their own ledger via
+/// `spawn_ledger_with_default_actor(None)`.
 pub async fn spawn_ledger() -> String {
+    spawn_ledger_with_default_actor(Some("test".into())).await
+}
+
+/// Same as `spawn_ledger` but lets the caller override the ledger's
+/// default_actor. Pass `None` to force every write to require the
+/// `X-Trackward-Actor` header (this is the production configuration).
+pub async fn spawn_ledger_with_default_actor(default_actor: Option<String>) -> String {
     // load .env so ledger picks up S3_ENDPOINT + creds
     let _ = dotenvy::from_path("../../.env");
     let _ = dotenvy::from_path(".env");
@@ -70,7 +83,8 @@ pub async fn spawn_ledger() -> String {
     let config = ledger::config::Config::from_env();
     let pool = ledger::db::connect(&config).await.expect("ledger db connect");
     let blob_store = ledger::s3::BlobStore::new(&config).await;
-    let app = ledger::build_router(ledger::AppState::new(pool, blob_store));
+    let state = ledger::AppState::new(pool, blob_store).with_default_actor(default_actor);
+    let app = ledger::build_router(state);
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     tokio::spawn(async move {
@@ -107,6 +121,7 @@ pub async fn spawn_gateway_with_binding(
         retrieval_backend,
         gated_tools,
         registry: binding.unwrap_or_default(),
+        service_account: "gateway-test".into(),
     };
     let state = AppState::new(config);
     let app = build_router_with_registry(state).await;

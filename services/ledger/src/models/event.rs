@@ -11,6 +11,7 @@ pub struct Event {
     pub kind: String,
     pub body: serde_json::Value,
     pub occurred_at: DateTime<Utc>,
+    pub actor_id: String,
     pub created_at: DateTime<Utc>,
 }
 

@@ -2,12 +2,14 @@ use axum::extract::{Path, State};
 use axum::Json;
 use uuid::Uuid;
 
+use crate::actor::Actor;
 use crate::errors::Error;
 use crate::models::{CreateRunVersionBinding, RunVersionBinding};
 use crate::AppState;
 
 pub async fn create(
     State(state): State<AppState>,
+    actor: Actor,
     Path(run_id): Path<Uuid>,
     Json(input): Json<CreateRunVersionBinding>,
 ) -> Result<Json<RunVersionBinding>, Error> {
@@ -23,14 +25,15 @@ pub async fn create(
     // otherwise callers could silently swap the version history on a run.
     let row = sqlx::query_as::<_, RunVersionBinding>(
         "INSERT INTO run_version_bindings
-            (run_id, prompt_version_id, policy_version_id, eval_result_id)
-         VALUES ($1, $2, $3, $4)
+            (run_id, prompt_version_id, policy_version_id, eval_result_id, actor_id)
+         VALUES ($1, $2, $3, $4, $5)
          RETURNING *",
     )
     .bind(run_id)
     .bind(input.prompt_version_id)
     .bind(input.policy_version_id)
     .bind(input.eval_result_id)
+    .bind(&actor.0)
     .fetch_one(&state.db)
     .await
     .map_err(|e| match e {
