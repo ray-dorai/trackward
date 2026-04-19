@@ -14,6 +14,7 @@ pub struct HumanApproval {
     pub requested_at: DateTime<Utc>,
     pub decided_at: DateTime<Utc>,
     pub metadata: serde_json::Value,
+    pub actor_id: String,
     pub created_at: DateTime<Utc>,
 }
 

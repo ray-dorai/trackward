@@ -5,6 +5,7 @@ use axum::response::Response;
 use axum::Json;
 use uuid::Uuid;
 
+use crate::actor::Actor;
 use crate::errors::Error;
 use crate::hash::sha256_hex;
 use crate::models::Artifact;
@@ -14,6 +15,7 @@ use crate::AppState;
 /// Fields: run_id, label (optional), media_type (optional), metadata (optional JSON), file (binary).
 pub async fn upload(
     State(state): State<AppState>,
+    actor: Actor,
     mut multipart: Multipart,
 ) -> Result<Json<Artifact>, Error> {
     let mut run_id: Option<Uuid> = None;
@@ -67,8 +69,8 @@ pub async fn upload(
 
     let id = Uuid::now_v7();
     let artifact = sqlx::query_as::<_, Artifact>(
-        "INSERT INTO artifacts (id, run_id, sha256, size_bytes, media_type, label, metadata)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
+        "INSERT INTO artifacts (id, run_id, sha256, size_bytes, media_type, label, metadata, actor_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          RETURNING *",
     )
     .bind(id)
@@ -78,6 +80,7 @@ pub async fn upload(
     .bind(&media_type)
     .bind(&label)
     .bind(&metadata)
+    .bind(&actor.0)
     .fetch_one(&state.db)
     .await?;
 

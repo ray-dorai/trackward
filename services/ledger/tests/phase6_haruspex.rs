@@ -19,7 +19,7 @@ async fn spawn_server() -> String {
     let config = Config::from_env();
     let pool = ledger::db::connect(&config).await.unwrap();
     let blob_store = BlobStore::new(&config).await;
-    let state = AppState::new(pool, blob_store);
+    let state = AppState::new(pool, blob_store).with_default_actor(Some("test".into()));
     let app = build_router(state);
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();

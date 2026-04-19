@@ -11,6 +11,7 @@ pub struct PolicyVersion {
     pub git_sha: String,
     pub content_hash: String,
     pub metadata: serde_json::Value,
+    pub actor_id: String,
     pub created_at: DateTime<Utc>,
 }
 

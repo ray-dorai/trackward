@@ -1,0 +1,92 @@
+# cargo-deny configuration.
+#
+# Run locally: `cargo deny check`
+# Run in CI:   .github/workflows/security.yml
+#
+# Three things we care about for a regulated-customer product:
+#   1. No crates with open security advisories ship in a release build.
+#   2. No license we can't sublicense (GPL/AGPL) sneaks in transitively.
+#   3. No crate sourced from anywhere except crates.io (supply-chain attack
+#      via typo-squatted git dep is a real class).
+
+[graph]
+# Check all targets we ship on (Linux x86_64 is the only one today; expand
+# when we add more).
+targets = [
+    { triple = "x86_64-unknown-linux-gnu" },
+]
+all-features = false
+no-default-features = false
+
+[advisories]
+version = 2
+# Deny anything with a RustSec advisory. Yank a known-good commit if this
+# ever breaks a release — do not suppress.
+yanked = "deny"
+ignore = [
+    # rustls-webpki 0.101.7 is pulled transitively via aws-sdk → rustls 0.21.
+    # Both advisories concern certificate name-constraint validation, which
+    # is only reachable through inbound client-certificate verification.
+    # Today we use TLS only for outbound to S3 (server-auth, pinned by the
+    # AWS SDK). These become reachable when Phase 10 adds mTLS on the
+    # ledger/gateway; Phase 10 will upgrade the rustls stack and clear
+    # these entries. Revisit if the outbound surface changes.
+    { id = "RUSTSEC-2026-0098", reason = "not reachable: outbound S3 TLS only; clear when Phase 10 upgrades rustls" },
+    { id = "RUSTSEC-2026-0099", reason = "not reachable: outbound S3 TLS only; clear when Phase 10 upgrades rustls" },
+]
+
+[licenses]
+version = 2
+# Our own workspace crates (ledger, gateway, verifier) aren't published
+# and don't carry a public license — they're private application code.
+# Tell cargo-deny to skip licensing checks on them.
+private = { ignore = true }
+# Allow-list only. Everything the current dep tree uses must appear here.
+# Adding a new license requires a conscious decision — update this list and
+# explain why in the commit message.
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-3.0",
+    "Unicode-DFS-2016",
+    "Zlib",
+    "MPL-2.0",
+    "CC0-1.0",
+    "OpenSSL",
+    # Used by webpki-roots (Mozilla trusted root cert bundle). Permissive,
+    # SPDX-recognized, appropriate for distributing a data set like a trust
+    # store.
+    "CDLA-Permissive-2.0",
+]
+confidence-threshold = 0.9
+
+# ring ships with a composite license that cargo-deny can't always parse.
+# Pin the crate-level clarification here — its actual terms are a mix of
+# ISC, MIT, and OpenSSL, all already in our allow-list.
+[[licenses.clarify]]
+crate = "ring"
+expression = "ISC AND MIT AND OpenSSL"
+license-files = [
+    { path = "LICENSE", hash = 0xbd0eed23 },
+]
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+# Intra-workspace path deps look like "wildcards" to cargo-deny. They're
+# not — they resolve to the exact version checked into this repo.
+allow-wildcard-paths = true
+highlight = "all"
+# Skip duplicate-version warnings for crates where the ecosystem hasn't
+# converged yet. Revisit periodically.
+skip-tree = []
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

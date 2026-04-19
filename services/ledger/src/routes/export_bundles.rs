@@ -15,6 +15,7 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
+use crate::actor::Actor;
 use crate::errors::Error;
 use crate::models::{CaseEvidence, CreateExportBundle, ExportBundle};
 use crate::AppState;
@@ -35,6 +36,7 @@ struct ManifestEvidence {
 
 pub async fn create(
     State(state): State<AppState>,
+    actor: Actor,
     Path(case_id): Path<Uuid>,
     Json(input): Json<CreateExportBundle>,
 ) -> Result<Json<ExportBundle>, Error> {
@@ -76,8 +78,8 @@ pub async fn create(
     let row = sqlx::query_as::<_, ExportBundle>(
         "INSERT INTO export_bundles
             (id, case_id, manifest_json, manifest_sha256, signature,
-             key_id, public_key_hex, signed_by, signed_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+             key_id, public_key_hex, signed_by, signed_at, actor_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
          RETURNING *",
     )
     .bind(id)
@@ -89,6 +91,7 @@ pub async fn create(
     .bind(&state.signing.public_key_hex)
     .bind(&input.signed_by)
     .bind(signed_at)
+    .bind(&actor.0)
     .fetch_one(&state.db)
     .await?;
 

@@ -3,6 +3,7 @@ use axum::Json;
 use serde::Deserialize;
 use uuid::Uuid;
 
+use crate::actor::Actor;
 use crate::errors::Error;
 use crate::models::{CreateEvalResult, EvalResult};
 use crate::AppState;
@@ -16,13 +17,14 @@ pub struct ListQuery {
 
 pub async fn create(
     State(state): State<AppState>,
+    actor: Actor,
     Json(input): Json<CreateEvalResult>,
 ) -> Result<Json<EvalResult>, Error> {
     let id = Uuid::now_v7();
     let row = sqlx::query_as::<_, EvalResult>(
         "INSERT INTO eval_results
-            (id, workflow, version, prompt_version_id, git_sha, content_hash, passed, summary, ran_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            (id, workflow, version, prompt_version_id, git_sha, content_hash, passed, summary, ran_at, actor_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
          RETURNING *",
     )
     .bind(id)
@@ -34,6 +36,7 @@ pub async fn create(
     .bind(input.passed)
     .bind(&input.summary)
     .bind(input.ran_at)
+    .bind(&actor.0)
     .fetch_one(&state.db)
     .await?;
 

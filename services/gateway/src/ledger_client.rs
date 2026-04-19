@@ -3,10 +3,20 @@ use uuid::Uuid;
 
 use crate::errors::Error;
 
+/// Header name the ledger uses to learn the caller's identity. Must stay in
+/// sync with `ledger::actor::ACTOR_HEADER`.
+const ACTOR_HEADER: &str = "x-trackward-actor";
+
 #[derive(Clone)]
 pub struct LedgerClient {
     http: reqwest::Client,
     base: String,
+    /// Identity sent on every write as `X-Trackward-Actor`. For the gateway
+    /// this is always the gateway's own service-account identifier —
+    /// writes on behalf of end-users are still stamped as the gateway,
+    /// and the gateway records the originating principal in the event
+    /// body (or, once real auth lands, forwards it as a distinct field).
+    actor: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -37,10 +47,11 @@ pub struct ToolInvocationResponse {
 }
 
 impl LedgerClient {
-    pub fn new(base: impl Into<String>) -> Self {
+    pub fn new(base: impl Into<String>, actor: impl Into<String>) -> Self {
         Self {
             http: reqwest::Client::new(),
             base: base.into(),
+            actor: actor.into(),
         }
     }
 
@@ -48,6 +59,7 @@ impl LedgerClient {
         let resp = self
             .http
             .post(format!("{}/runs", self.base))
+            .header(ACTOR_HEADER, &self.actor)
             .json(&serde_json::json!({ "agent": agent, "metadata": metadata }))
             .send()
             .await
@@ -68,6 +80,7 @@ impl LedgerClient {
         let resp = self
             .http
             .post(format!("{}/runs/{}/events", self.base, run_id))
+            .header(ACTOR_HEADER, &self.actor)
             .json(&serde_json::json!({ "kind": kind, "body": body }))
             .send()
             .await
@@ -92,6 +105,7 @@ impl LedgerClient {
         let resp = self
             .http
             .post(format!("{}/prompt-versions", self.base))
+            .header(ACTOR_HEADER, &self.actor)
             .json(&serde_json::json!({
                 "workflow": workflow,
                 "version": version,
@@ -121,6 +135,7 @@ impl LedgerClient {
         let resp = self
             .http
             .post(format!("{}/policy-versions", self.base))
+            .header(ACTOR_HEADER, &self.actor)
             .json(&serde_json::json!({
                 "scope": scope,
                 "version": version,
@@ -176,6 +191,7 @@ impl LedgerClient {
         let resp = self
             .http
             .post(format!("{}/runs/{}/bindings", self.base, run_id))
+            .header(ACTOR_HEADER, &self.actor)
             .json(&serde_json::json!({
                 "prompt_version_id": prompt_version_id,
                 "policy_version_id": policy_version_id,
@@ -209,6 +225,7 @@ impl LedgerClient {
         let resp = self
             .http
             .post(format!("{}/tool-invocations", self.base))
+            .header(ACTOR_HEADER, &self.actor)
             .json(&serde_json::json!({
                 "run_id": run_id,
                 "tool": tool,
@@ -244,6 +261,7 @@ impl LedgerClient {
         let resp = self
             .http
             .post(format!("{}/side-effects", self.base))
+            .header(ACTOR_HEADER, &self.actor)
             .json(&serde_json::json!({
                 "run_id": run_id,
                 "tool_invocation_id": tool_invocation_id,
@@ -281,6 +299,7 @@ impl LedgerClient {
         let resp = self
             .http
             .post(format!("{}/human-approvals", self.base))
+            .header(ACTOR_HEADER, &self.actor)
             .json(&serde_json::json!({
                 "id": id,
                 "run_id": run_id,
@@ -320,6 +339,7 @@ impl LedgerClient {
         let resp = self
             .http
             .post(format!("{}/artifacts", self.base))
+            .header(ACTOR_HEADER, &self.actor)
             .multipart(form)
             .send()
             .await

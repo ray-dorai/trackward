@@ -15,7 +15,7 @@ async fn spawn_server() -> String {
         .await
         .expect("failed to connect — is docker-compose up?");
     let blob_store = BlobStore::new(&config).await;
-    let state = AppState::new(pool, blob_store);
+    let state = AppState::new(pool, blob_store).with_default_actor(Some("test".into()));
 
     let app = build_router(state);
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();

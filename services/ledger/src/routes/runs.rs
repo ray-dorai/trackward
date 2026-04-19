@@ -5,28 +5,31 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use uuid::Uuid;
 
+use crate::actor::Actor;
 use crate::errors::Error;
 use crate::models::{CreateRun, Run};
 use crate::AppState;
 
 pub async fn create(
     State(state): State<AppState>,
+    actor: Actor,
     Json(input): Json<CreateRun>,
 ) -> Result<Json<Run>, Error> {
     let id = Uuid::now_v7();
     let run = sqlx::query_as::<_, Run>(
-        "INSERT INTO runs (id, agent, started_at, metadata)
-         VALUES ($1, $2, $3, $4)
+        "INSERT INTO runs (id, agent, started_at, metadata, actor_id)
+         VALUES ($1, $2, $3, $4, $5)
          RETURNING *",
     )
     .bind(id)
     .bind(&input.agent)
     .bind(input.started_at)
     .bind(&input.metadata)
+    .bind(&actor.0)
     .fetch_one(&state.db)
     .await?;
 
-    tracing::info!(run_id = %run.id, agent = %run.agent, "run created");
+    tracing::info!(run_id = %run.id, agent = %run.agent, actor_id = %run.actor_id, "run created");
     Ok(Json(run))
 }
 

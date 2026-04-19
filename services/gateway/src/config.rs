@@ -15,6 +15,12 @@ pub struct Config {
     pub gated_tools: Vec<String>,
     /// Registry binding — which prompt/policy/eval this gateway stamps runs with.
     pub registry: RegistryBinding,
+    /// Identifier this gateway uses when calling the ledger. Sent on every
+    /// ledger write as `X-Trackward-Actor`. In production this should be a
+    /// service-account name tied to the deployment (e.g.
+    /// `gateway/prod-us-east/v1`); in tests it defaults to `gateway-test`.
+    /// Read from `GATEWAY_SERVICE_ACCOUNT`.
+    pub service_account: String,
 }
 
 /// Which prompt & policy (and, by extension, eval) version every run minted
@@ -60,6 +66,8 @@ impl Config {
             retrieval_backend: env::var("RETRIEVAL_BACKEND").ok(),
             gated_tools,
             registry,
+            service_account: env::var("GATEWAY_SERVICE_ACCOUNT")
+                .unwrap_or_else(|_| "gateway".into()),
         }
     }
 }

@@ -15,6 +15,7 @@ pub struct ExportBundle {
     pub signed_by: String,
     pub signed_at: DateTime<Utc>,
     pub storage_uri: Option<String>,
+    pub actor_id: String,
     pub created_at: DateTime<Utc>,
 }
 

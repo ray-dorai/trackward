@@ -12,6 +12,7 @@ pub struct BiasSlice {
     pub value: Option<String>,
     pub score: Option<f64>,
     pub metadata: serde_json::Value,
+    pub actor_id: String,
     pub created_at: DateTime<Utc>,
 }
 

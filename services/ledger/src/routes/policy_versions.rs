@@ -3,6 +3,7 @@ use axum::Json;
 use serde::Deserialize;
 use uuid::Uuid;
 
+use crate::actor::Actor;
 use crate::errors::Error;
 use crate::models::{CreatePolicyVersion, PolicyVersion};
 use crate::AppState;
@@ -16,6 +17,7 @@ pub struct ListQuery {
 
 pub async fn create(
     State(state): State<AppState>,
+    actor: Actor,
     Json(input): Json<CreatePolicyVersion>,
 ) -> Result<Json<PolicyVersion>, Error> {
     if let Some(existing) = sqlx::query_as::<_, PolicyVersion>(
@@ -33,8 +35,8 @@ pub async fn create(
 
     let id = Uuid::now_v7();
     let row = sqlx::query_as::<_, PolicyVersion>(
-        "INSERT INTO policy_versions (id, scope, version, git_sha, content_hash, metadata)
-         VALUES ($1, $2, $3, $4, $5, $6)
+        "INSERT INTO policy_versions (id, scope, version, git_sha, content_hash, metadata, actor_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
          RETURNING *",
     )
     .bind(id)
@@ -43,6 +45,7 @@ pub async fn create(
     .bind(&input.git_sha)
     .bind(&input.content_hash)
     .bind(&input.metadata)
+    .bind(&actor.0)
     .fetch_one(&state.db)
     .await?;
 

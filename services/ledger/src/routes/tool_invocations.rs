@@ -2,20 +2,22 @@ use axum::extract::{Path, State};
 use axum::Json;
 use uuid::Uuid;
 
+use crate::actor::Actor;
 use crate::errors::Error;
 use crate::models::{CreateToolInvocation, ToolInvocation};
 use crate::AppState;
 
 pub async fn create(
     State(state): State<AppState>,
+    actor: Actor,
     Json(input): Json<CreateToolInvocation>,
 ) -> Result<Json<ToolInvocation>, Error> {
     let id = Uuid::now_v7();
     let row = sqlx::query_as::<_, ToolInvocation>(
         "INSERT INTO tool_invocations
             (id, run_id, tool, input, output, status, status_code,
-             started_at, finished_at, metadata)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+             started_at, finished_at, metadata, actor_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
          RETURNING *",
     )
     .bind(id)
@@ -28,6 +30,7 @@ pub async fn create(
     .bind(input.started_at)
     .bind(input.finished_at)
     .bind(&input.metadata)
+    .bind(&actor.0)
     .fetch_one(&state.db)
     .await?;
 
