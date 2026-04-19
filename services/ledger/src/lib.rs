@@ -1,4 +1,5 @@
 pub mod actor;
+pub mod chain;
 pub mod config;
 pub mod db;
 pub mod errors;

@@ -1,8 +1,10 @@
 use axum::extract::{Path, State};
 use axum::Json;
+use chain_core::CanonicalField;
 use uuid::Uuid;
 
 use crate::actor::Actor;
+use crate::chain::{compute_chain, ChainTable};
 use crate::errors::Error;
 use crate::models::{BiasSlice, CreateBiasSlice};
 use crate::AppState;
@@ -21,10 +23,45 @@ pub async fn create(
     }
 
     let id = Uuid::now_v7();
+
+    let mut tx = state.db.begin().await?;
+
+    // Chain only when this bias_slice belongs to a run. Eval-time slices
+    // (no run_id) get `prev_hash = NULL, row_hash = zeros` — the legacy
+    // marker. The chain covers the run-scoped slices, which is the
+    // audit-relevant case; eval-registry slices are immutable by
+    // content-hash via the registry's own machinery.
+    let (prev_hash, row_hash): (Option<Vec<u8>>, Vec<u8>) = match input.run_id {
+        Some(run_id) => {
+            // Score is f64 which canonical_json deliberately rejects
+            // (lossy across languages). Serialize using Rust's shortest
+            // round-trip string form; that's stable for finite floats.
+            // Non-finite floats shouldn't appear in the schema; we reject
+            // them here rather than hash a platform-dependent "NaN".
+            let score_str = input.score.map(|f| {
+                assert!(f.is_finite(), "bias_slice.score must be finite");
+                f.to_string()
+            });
+            let fields = vec![
+                CanonicalField::uuid("id", id),
+                CanonicalField::uuid("run_id", run_id),
+                CanonicalField::opt_uuid("eval_result_id", input.eval_result_id),
+                CanonicalField::str("label", &input.label),
+                CanonicalField::opt_str("value", input.value.clone()),
+                CanonicalField::opt_str("score", score_str),
+                CanonicalField::json("metadata", input.metadata.clone()),
+                CanonicalField::str("actor_id", &actor.0),
+            ];
+            let link = compute_chain(&mut tx, ChainTable::BiasSlices, run_id, &fields).await?;
+            (link.prev_hash, link.row_hash)
+        }
+        None => (None, crate::chain::LEGACY_ROW_HASH.to_vec()),
+    };
+
     let row = sqlx::query_as::<_, BiasSlice>(
         "INSERT INTO bias_slices
-            (id, run_id, eval_result_id, label, value, score, metadata, actor_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            (id, run_id, eval_result_id, label, value, score, metadata, actor_id, prev_hash, row_hash)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
          RETURNING *",
     )
     .bind(id)
@@ -35,8 +72,12 @@ pub async fn create(
     .bind(input.score)
     .bind(&input.metadata)
     .bind(&actor.0)
-    .fetch_one(&state.db)
+    .bind(prev_hash.as_deref())
+    .bind(&row_hash)
+    .fetch_one(&mut *tx)
     .await?;
+
+    tx.commit().await?;
 
     tracing::info!(
         id = %row.id,
