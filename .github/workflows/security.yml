@@ -1,0 +1,58 @@
+name: security
+
+# Supply-chain hygiene for every PR and every push to main:
+#   - cargo audit:   any dep with an open RustSec advisory fails the build.
+#   - cargo deny:    license allow-list + no unexpected registries/git sources.
+#   - cyclonedx:     generate an SBOM and attach it as a workflow artifact.
+#
+# These are cheap, and a failing questionnaire answer costs more than the
+# CI minutes. Do not skip on the grounds of "just a docs change" — the
+# advisory DB updates independently of our repo, so a passing run yesterday
+# does not mean passing today.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    # Daily run against main so newly-published advisories surface even on
+    # quiet weeks. The RustSec DB updates continuously.
+    - cron: "0 6 * * *"
+
+jobs:
+  audit:
+    name: cargo audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: rustsec/audit-check@v2.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  deny:
+    name: cargo deny
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check
+          arguments: --all-features
+
+  sbom:
+    name: cyclonedx SBOM
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install cargo-cyclonedx
+        run: cargo install cargo-cyclonedx --locked
+      - name: Generate SBOM
+        run: cargo cyclonedx --format json --override-filename trackward-sbom
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: "**/trackward-sbom.cdx.json"
+          if-no-files-found: error
+          retention-days: 90
