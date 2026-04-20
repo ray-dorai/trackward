@@ -6,6 +6,7 @@ pub mod otel;
 pub mod registry;
 pub mod retrieval_proxy;
 pub mod routes;
+pub mod tls;
 pub mod tool_proxy;
 
 use std::sync::Arc;
@@ -28,7 +29,12 @@ pub struct AppState {
 
 impl AppState {
     pub fn new(config: Config) -> Self {
-        let ledger = LedgerClient::new(config.ledger_url.clone(), config.service_account.clone());
+        let ledger = LedgerClient::with_optional_tls(
+            config.ledger_url.clone(),
+            config.service_account.clone(),
+            config.ledger_client_tls.as_ref(),
+        )
+        .expect("failed to build ledger client (mTLS paths unreadable?)");
         Self {
             config: Arc::new(config),
             ledger,

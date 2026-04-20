@@ -1,6 +1,7 @@
 use serde::Deserialize;
 use uuid::Uuid;
 
+use crate::config::LedgerClientTls;
 use crate::errors::Error;
 
 /// Header name the ledger uses to learn the caller's identity. Must stay in
@@ -17,6 +18,57 @@ pub struct LedgerClient {
     /// and the gateway records the originating principal in the event
     /// body (or, once real auth lands, forwards it as a distinct field).
     actor: String,
+}
+
+/// Build a reqwest client with client-certificate auth wired in, used when
+/// the ledger is configured to require mTLS. When `tls` is `None` this is
+/// equivalent to `reqwest::Client::new()` and keeps the plaintext path
+/// working unchanged.
+///
+/// Failure is fatal at boot because a gateway that silently falls back to
+/// no-auth would hide a misconfigured deployment behind a "nothing works"
+/// symptom instead of a clear error.
+fn build_http_client(tls: Option<&LedgerClientTls>) -> Result<reqwest::Client, Error> {
+    let Some(tls) = tls else {
+        return Ok(reqwest::Client::new());
+    };
+
+    let cert_pem = std::fs::read(&tls.cert_path).map_err(|e| {
+        Error::Ledger(format!(
+            "read LEDGER_CLIENT_CERT_PATH {}: {e}",
+            tls.cert_path.display()
+        ))
+    })?;
+    let key_pem = std::fs::read(&tls.key_path).map_err(|e| {
+        Error::Ledger(format!(
+            "read LEDGER_CLIENT_KEY_PATH {}: {e}",
+            tls.key_path.display()
+        ))
+    })?;
+    let ca_pem = std::fs::read(&tls.server_ca_path).map_err(|e| {
+        Error::Ledger(format!(
+            "read LEDGER_SERVER_CA_PATH {}: {e}",
+            tls.server_ca_path.display()
+        ))
+    })?;
+
+    // reqwest::Identity::from_pem wants cert + key concatenated in a single
+    // PEM blob. We tolerate whichever order the operator supplied.
+    let mut identity_pem = cert_pem.clone();
+    identity_pem.extend_from_slice(b"\n");
+    identity_pem.extend_from_slice(&key_pem);
+    let identity = reqwest::Identity::from_pem(&identity_pem)
+        .map_err(|e| Error::Ledger(format!("parse client identity PEM: {e}")))?;
+
+    let ca_cert = reqwest::Certificate::from_pem(&ca_pem)
+        .map_err(|e| Error::Ledger(format!("parse server CA PEM: {e}")))?;
+
+    reqwest::Client::builder()
+        .use_rustls_tls()
+        .identity(identity)
+        .add_root_certificate(ca_cert)
+        .build()
+        .map_err(|e| Error::Ledger(format!("build mTLS client: {e}")))
 }
 
 #[derive(Debug, Deserialize)]
@@ -53,6 +105,24 @@ impl LedgerClient {
             base: base.into(),
             actor: actor.into(),
         }
+    }
+
+    /// Build a LedgerClient that presents a client cert to the ledger. When
+    /// `tls` is `None` this degrades to `new` — gateways without
+    /// `LEDGER_CLIENT_*` env vars keep working as plaintext callers.
+    ///
+    /// Returns an error only if the PEM files can't be read or parsed; a
+    /// bad config should fail fast at startup rather than at first request.
+    pub fn with_optional_tls(
+        base: impl Into<String>,
+        actor: impl Into<String>,
+        tls: Option<&LedgerClientTls>,
+    ) -> Result<Self, Error> {
+        Ok(Self {
+            http: build_http_client(tls)?,
+            base: base.into(),
+            actor: actor.into(),
+        })
     }
 
     pub async fn create_run(&self, agent: &str, metadata: serde_json::Value) -> Result<Uuid, Error> {

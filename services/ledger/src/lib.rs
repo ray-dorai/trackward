@@ -11,6 +11,7 @@ pub mod otel;
 pub mod routes;
 pub mod s3;
 pub mod signing;
+pub mod tls;
 
 use axum::routing::{get, post};
 use axum::Router;

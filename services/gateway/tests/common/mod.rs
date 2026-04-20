@@ -122,6 +122,8 @@ pub async fn spawn_gateway_with_binding(
         gated_tools,
         registry: binding.unwrap_or_default(),
         service_account: "gateway-test".into(),
+        tls: None,
+        ledger_client_tls: None,
     };
     let state = AppState::new(config);
     let app = build_router_with_registry(state).await;

@@ -22,6 +22,9 @@ tracing-opentelemetry = { workspace = true }
 uuid = { workspace = true }
 sha2 = { workspace = true }
 hex = { workspace = true }
+axum-server = { workspace = true }
+rustls = { workspace = true }
+rustls-pemfile = { workspace = true }
 
 [dev-dependencies]
 dotenvy = "0.15"
@@ -31,3 +34,4 @@ uuid = { workspace = true }
 axum = { workspace = true }
 serde_json = { workspace = true }
 ledger = { path = "../ledger" }
+rcgen = { workspace = true }

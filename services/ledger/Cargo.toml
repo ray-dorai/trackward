@@ -28,6 +28,9 @@ hex = { workspace = true }
 ed25519-dalek = { workspace = true }
 rand = { workspace = true }
 rand_core = { workspace = true }
+axum-server = { workspace = true }
+rustls = { workspace = true }
+rustls-pemfile = { workspace = true }
 
 [dev-dependencies]
 reqwest = { workspace = true }
@@ -39,3 +42,5 @@ dotenvy = "0.15"
 ed25519-dalek = { workspace = true }
 hex = { workspace = true }
 verifier = { path = "../../tools/verifier" }
+rcgen = { workspace = true }
+tempfile = "3"
