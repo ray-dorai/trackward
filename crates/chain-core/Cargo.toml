@@ -1,0 +1,13 @@
+[package]
+name = "chain-core"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Canonical row encoding + SHA-256 hash chain for the trackward ledger. Shared by ledger and verifier so they cannot drift."
+
+[dependencies]
+chrono = { workspace = true }
+hex = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+uuid = { workspace = true }

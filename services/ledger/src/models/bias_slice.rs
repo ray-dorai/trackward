@@ -13,6 +13,10 @@ pub struct BiasSlice {
     pub score: Option<f64>,
     pub metadata: serde_json::Value,
     pub actor_id: String,
+    #[serde(with = "crate::hash::hex_bytes_opt")]
+    pub prev_hash: Option<Vec<u8>>,
+    #[serde(with = "crate::hash::hex_bytes")]
+    pub row_hash: Vec<u8>,
     pub created_at: DateTime<Utc>,
 }
 

@@ -1,8 +1,10 @@
 use axum::extract::{Path, State};
 use axum::Json;
+use chain_core::CanonicalField;
 use uuid::Uuid;
 
 use crate::actor::Actor;
+use crate::chain::{compute_chain, ChainTable};
 use crate::errors::Error;
 use crate::models::{CreateHumanApproval, HumanApproval};
 use crate::AppState;
@@ -12,11 +14,27 @@ pub async fn create(
     actor: Actor,
     Json(input): Json<CreateHumanApproval>,
 ) -> Result<Json<HumanApproval>, Error> {
+    let mut tx = state.db.begin().await?;
+
+    let fields = vec![
+        CanonicalField::uuid("id", input.id),
+        CanonicalField::uuid("run_id", input.run_id),
+        CanonicalField::str("tool", &input.tool),
+        CanonicalField::str("decision", &input.decision),
+        CanonicalField::opt_str("reason", input.reason.clone()),
+        CanonicalField::opt_str("decided_by", input.decided_by.clone()),
+        CanonicalField::timestamp("requested_at", input.requested_at),
+        CanonicalField::timestamp("decided_at", input.decided_at),
+        CanonicalField::json("metadata", input.metadata.clone()),
+        CanonicalField::str("actor_id", &actor.0),
+    ];
+    let link = compute_chain(&mut tx, ChainTable::HumanApprovals, input.run_id, &fields).await?;
+
     let row = sqlx::query_as::<_, HumanApproval>(
         "INSERT INTO human_approvals
             (id, run_id, tool, decision, reason, decided_by,
-             requested_at, decided_at, metadata, actor_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+             requested_at, decided_at, metadata, actor_id, prev_hash, row_hash)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
          RETURNING *",
     )
     .bind(input.id)
@@ -29,7 +47,9 @@ pub async fn create(
     .bind(input.decided_at)
     .bind(&input.metadata)
     .bind(&actor.0)
-    .fetch_one(&state.db)
+    .bind(link.prev_hash.as_deref())
+    .bind(&link.row_hash)
+    .fetch_one(&mut *tx)
     .await
     .map_err(|e| match e {
         // id collision (approval already recorded) — keep it a conflict
@@ -39,6 +59,8 @@ pub async fn create(
         }
         other => Error::Db(other),
     })?;
+
+    tx.commit().await?;
 
     tracing::info!(
         id = %row.id,

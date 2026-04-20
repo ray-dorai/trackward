@@ -14,6 +14,10 @@ pub struct SideEffect {
     pub confirmation: serde_json::Value,
     pub observed_at: DateTime<Utc>,
     pub actor_id: String,
+    #[serde(with = "crate::hash::hex_bytes_opt")]
+    pub prev_hash: Option<Vec<u8>>,
+    #[serde(with = "crate::hash::hex_bytes")]
+    pub row_hash: Vec<u8>,
     pub created_at: DateTime<Utc>,
 }
 

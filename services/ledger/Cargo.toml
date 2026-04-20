@@ -5,6 +5,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
+chain-core = { path = "../../crates/chain-core" }
 axum = { workspace = true }
 chrono = { workspace = true }
 serde = { workspace = true }

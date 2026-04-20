@@ -1,9 +1,15 @@
-//! Offline verifier for trackward export bundles.
+//! Offline verifier for trackward export bundles and merkle anchors.
 //!
-//! The bundle is self-contained: it carries the public key used to sign
+//! Bundles are self-contained: they carry the public key used to sign
 //! the manifest, so the verifier runs without any connection to the
-//! ledger that produced it. An operator receiving a bundle trusts the
-//! *public key*, not the service.
+//! ledger that produced them. An operator receiving a bundle trusts
+//! the *public key*, not the service. Anchors (Phase 9b) follow the
+//! same pattern — anchor documents are self-contained too, plus the
+//! caller supplies the row_hashes the anchor is supposed to cover.
+
+pub mod anchor;
+
+pub use anchor::{verify_anchor, VerifiedAnchor};
 
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use serde_json::Value;
@@ -21,6 +27,10 @@ pub enum VerifyError {
     BadSignature,
     #[error("missing field: {0}")]
     MissingField(&'static str),
+    #[error("anchor leaf count mismatch: claimed {expected}, supplied {actual}")]
+    LeafCountMismatch { expected: usize, actual: usize },
+    #[error("anchor root mismatch: expected {expected}, recomputed {actual}")]
+    RootMismatch { expected: String, actual: String },
 }
 
 #[derive(Debug)]

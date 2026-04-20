@@ -3,9 +3,11 @@ use axum::extract::{Multipart, Path, State};
 use axum::http::{header, StatusCode};
 use axum::response::Response;
 use axum::Json;
+use chain_core::CanonicalField;
 use uuid::Uuid;
 
 use crate::actor::Actor;
+use crate::chain::{compute_chain, ChainTable};
 use crate::errors::Error;
 use crate::hash::sha256_hex;
 use crate::models::Artifact;
@@ -68,9 +70,24 @@ pub async fn upload(
     state.blob_store.put(&digest, data).await?;
 
     let id = Uuid::now_v7();
+
+    let mut tx = state.db.begin().await?;
+
+    let fields = vec![
+        CanonicalField::uuid("id", id),
+        CanonicalField::uuid("run_id", run_id),
+        CanonicalField::str("sha256", &digest),
+        CanonicalField::i64("size_bytes", size),
+        CanonicalField::str("media_type", &media_type),
+        CanonicalField::str("label", &label),
+        CanonicalField::json("metadata", metadata.clone()),
+        CanonicalField::str("actor_id", &actor.0),
+    ];
+    let link = compute_chain(&mut tx, ChainTable::Artifacts, run_id, &fields).await?;
+
     let artifact = sqlx::query_as::<_, Artifact>(
-        "INSERT INTO artifacts (id, run_id, sha256, size_bytes, media_type, label, metadata, actor_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        "INSERT INTO artifacts (id, run_id, sha256, size_bytes, media_type, label, metadata, actor_id, prev_hash, row_hash)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
          RETURNING *",
     )
     .bind(id)
@@ -81,8 +98,12 @@ pub async fn upload(
     .bind(&label)
     .bind(&metadata)
     .bind(&actor.0)
-    .fetch_one(&state.db)
+    .bind(link.prev_hash.as_deref())
+    .bind(&link.row_hash)
+    .fetch_one(&mut *tx)
     .await?;
+
+    tx.commit().await?;
 
     tracing::info!(
         artifact_id = %artifact.id,

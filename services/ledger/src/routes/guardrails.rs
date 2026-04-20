@@ -1,8 +1,10 @@
 use axum::extract::{Path, State};
 use axum::Json;
+use chain_core::CanonicalField;
 use uuid::Uuid;
 
 use crate::actor::Actor;
+use crate::chain::{compute_chain, ChainTable};
 use crate::errors::Error;
 use crate::models::{CreateGuardrail, Guardrail};
 use crate::AppState;
@@ -13,10 +15,26 @@ pub async fn create(
     Json(input): Json<CreateGuardrail>,
 ) -> Result<Json<Guardrail>, Error> {
     let id = Uuid::now_v7();
+
+    let mut tx = state.db.begin().await?;
+
+    let fields = vec![
+        CanonicalField::uuid("id", id),
+        CanonicalField::uuid("run_id", input.run_id),
+        CanonicalField::str("name", &input.name),
+        CanonicalField::str("stage", &input.stage),
+        CanonicalField::opt_str("target", input.target.clone()),
+        CanonicalField::str("outcome", &input.outcome),
+        CanonicalField::json("detail", input.detail.clone()),
+        CanonicalField::timestamp("evaluated_at", input.evaluated_at),
+        CanonicalField::str("actor_id", &actor.0),
+    ];
+    let link = compute_chain(&mut tx, ChainTable::Guardrails, input.run_id, &fields).await?;
+
     let row = sqlx::query_as::<_, Guardrail>(
         "INSERT INTO guardrails
-            (id, run_id, name, stage, target, outcome, detail, evaluated_at, actor_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            (id, run_id, name, stage, target, outcome, detail, evaluated_at, actor_id, prev_hash, row_hash)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
          RETURNING *",
     )
     .bind(id)
@@ -28,8 +46,12 @@ pub async fn create(
     .bind(&input.detail)
     .bind(input.evaluated_at)
     .bind(&actor.0)
-    .fetch_one(&state.db)
+    .bind(link.prev_hash.as_deref())
+    .bind(&link.row_hash)
+    .fetch_one(&mut *tx)
     .await?;
+
+    tx.commit().await?;
 
     tracing::info!(
         id = %row.id,
