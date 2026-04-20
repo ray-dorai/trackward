@@ -1,4 +1,5 @@
 use std::env;
+use std::path::PathBuf;
 
 #[derive(Clone, Debug)]
 pub struct Config {
@@ -11,6 +12,11 @@ pub struct Config {
     /// (development/test default); when set, `main.rs` spawns the
     /// periodic anchor task.
     pub anchor: Option<AnchorConfig>,
+    /// Optional TLS configuration. `Some` when all three paths resolve from
+    /// env vars (`TLS_CERT_PATH`, `TLS_KEY_PATH`, `TLS_CLIENT_CA_PATH`) —
+    /// partial configurations are rejected so an operator who thought they
+    /// enabled mTLS doesn't end up serving plaintext.
+    pub tls: Option<TlsPaths>,
 }
 
 /// Tuning knobs for the merkle-anchor loop. All environment variables
@@ -31,6 +37,13 @@ pub struct AnchorConfig {
     /// with a default retention at least this long; this header is the
     /// per-object reinforcement.
     pub retain_days: u32,
+}
+
+#[derive(Clone, Debug)]
+pub struct TlsPaths {
+    pub cert_path: PathBuf,
+    pub key_path: PathBuf,
+    pub client_ca_path: PathBuf,
 }
 
 impl Config {
@@ -66,6 +79,39 @@ impl Config {
             s3_endpoint: env::var("S3_ENDPOINT").ok(),
             s3_region: env::var("S3_REGION").unwrap_or_else(|_| "us-east-1".into()),
             anchor,
+            tls: TlsPaths::from_env(),
+        }
+    }
+
+    pub fn tls_enabled(&self) -> bool {
+        self.tls.is_some()
+    }
+}
+
+impl TlsPaths {
+    /// All-or-nothing: returns `Some` only if every path is set; logs and
+    /// returns `None` if exactly one or two are set so partial configs fail
+    /// loudly during bring-up rather than silently serving plaintext.
+    pub fn from_env() -> Option<Self> {
+        let cert = env::var("TLS_CERT_PATH").ok();
+        let key = env::var("TLS_KEY_PATH").ok();
+        let ca = env::var("TLS_CLIENT_CA_PATH").ok();
+        match (cert, key, ca) {
+            (Some(cert), Some(key), Some(ca)) => Some(Self {
+                cert_path: PathBuf::from(cert),
+                key_path: PathBuf::from(key),
+                client_ca_path: PathBuf::from(ca),
+            }),
+            (None, None, None) => None,
+            (cert, key, ca) => {
+                tracing::warn!(
+                    cert = cert.is_some(),
+                    key = key.is_some(),
+                    ca = ca.is_some(),
+                    "TLS_CERT_PATH / TLS_KEY_PATH / TLS_CLIENT_CA_PATH must all be set or all unset; starting in plaintext mode"
+                );
+                None
+            }
         }
     }
 }

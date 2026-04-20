@@ -21,6 +21,33 @@ pub struct Config {
     /// `gateway/prod-us-east/v1`); in tests it defaults to `gateway-test`.
     /// Read from `GATEWAY_SERVICE_ACCOUNT`.
     pub service_account: String,
+    /// Server-side mTLS paths (what clients of the gateway present). All or
+    /// nothing; partial configs are logged and ignored. See
+    /// `ledger::config::TlsPaths` for the same pattern on the ledger side.
+    pub tls: Option<TlsPaths>,
+    /// Client-side mTLS paths (what the gateway presents when calling the
+    /// ledger). Independent of `tls` because the two endpoints may be run
+    /// by different operators with different PKI. All three of
+    /// `LEDGER_CLIENT_CERT_PATH`, `LEDGER_CLIENT_KEY_PATH`,
+    /// `LEDGER_SERVER_CA_PATH` must be set to enable.
+    pub ledger_client_tls: Option<LedgerClientTls>,
+}
+
+#[derive(Clone, Debug)]
+pub struct TlsPaths {
+    pub cert_path: PathBuf,
+    pub key_path: PathBuf,
+    pub client_ca_path: PathBuf,
+}
+
+#[derive(Clone, Debug)]
+pub struct LedgerClientTls {
+    /// PEM: gateway's leaf cert (+ intermediates) presented to the ledger.
+    pub cert_path: PathBuf,
+    /// PEM: gateway's private key matching `cert_path`.
+    pub key_path: PathBuf,
+    /// PEM: CA bundle used to verify the ledger's server cert.
+    pub server_ca_path: PathBuf,
 }
 
 /// Which prompt & policy (and, by extension, eval) version every run minted
@@ -68,6 +95,62 @@ impl Config {
             registry,
             service_account: env::var("GATEWAY_SERVICE_ACCOUNT")
                 .unwrap_or_else(|_| "gateway".into()),
+            tls: TlsPaths::from_env(),
+            ledger_client_tls: LedgerClientTls::from_env(),
+        }
+    }
+
+    pub fn tls_enabled(&self) -> bool {
+        self.tls.is_some()
+    }
+}
+
+impl TlsPaths {
+    pub fn from_env() -> Option<Self> {
+        let cert = env::var("TLS_CERT_PATH").ok();
+        let key = env::var("TLS_KEY_PATH").ok();
+        let ca = env::var("TLS_CLIENT_CA_PATH").ok();
+        match (cert, key, ca) {
+            (Some(cert), Some(key), Some(ca)) => Some(Self {
+                cert_path: PathBuf::from(cert),
+                key_path: PathBuf::from(key),
+                client_ca_path: PathBuf::from(ca),
+            }),
+            (None, None, None) => None,
+            (cert, key, ca) => {
+                tracing::warn!(
+                    cert = cert.is_some(),
+                    key = key.is_some(),
+                    ca = ca.is_some(),
+                    "TLS_CERT_PATH / TLS_KEY_PATH / TLS_CLIENT_CA_PATH must all be set or all unset; starting in plaintext mode"
+                );
+                None
+            }
+        }
+    }
+}
+
+impl LedgerClientTls {
+    pub fn from_env() -> Option<Self> {
+        let cert = env::var("LEDGER_CLIENT_CERT_PATH").ok();
+        let key = env::var("LEDGER_CLIENT_KEY_PATH").ok();
+        let ca = env::var("LEDGER_SERVER_CA_PATH").ok();
+        match (cert, key, ca) {
+            (Some(cert), Some(key), Some(ca)) => Some(Self {
+                cert_path: PathBuf::from(cert),
+                key_path: PathBuf::from(key),
+                server_ca_path: PathBuf::from(ca),
+            }),
+            (None, None, None) => None,
+            (cert, key, ca) => {
+                tracing::warn!(
+                    cert = cert.is_some(),
+                    key = key.is_some(),
+                    ca = ca.is_some(),
+                    "LEDGER_CLIENT_CERT_PATH / LEDGER_CLIENT_KEY_PATH / LEDGER_SERVER_CA_PATH must all be set or all unset; gateway will call ledger without client auth"
+                );
+                None
+            }
         }
     }
 }
