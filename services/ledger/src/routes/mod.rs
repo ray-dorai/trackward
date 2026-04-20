@@ -1,3 +1,4 @@
+pub mod anchors;
 pub mod artifacts;
 pub mod bias_slices;
 pub mod case_evidence;

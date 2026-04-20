@@ -1,4 +1,6 @@
 pub mod actor;
+pub mod anchoring;
+pub mod anchors;
 pub mod chain;
 pub mod config;
 pub mod db;
@@ -15,6 +17,7 @@ use axum::Router;
 use sqlx::PgPool;
 use tower_http::trace::TraceLayer;
 
+use crate::anchors::AnchorSink;
 use crate::s3::BlobStore;
 use crate::signing::SigningService;
 
@@ -23,6 +26,13 @@ pub struct AppState {
     pub db: PgPool,
     pub blob_store: BlobStore,
     pub signing: SigningService,
+    /// Where signed merkle-anchor manifests go. Defaults to
+    /// `AnchorSink::Noop` — the anchor row still persists to the DB
+    /// but no external WORM upload happens. Production sets this to
+    /// an S3 sink via `AppState::with_anchor_sink` after the sink is
+    /// constructed from config. Tests inject an in-memory sink so they
+    /// can read the uploaded manifest back.
+    pub anchor_sink: AnchorSink,
     /// Fallback actor_id used when a write arrives without an
     /// `X-Trackward-Actor` header. `None` makes the header strictly required
     /// (production). `Some(value)` permits legacy/unadorned callers and
@@ -37,6 +47,7 @@ impl AppState {
             db,
             blob_store,
             signing: SigningService::from_env(),
+            anchor_sink: AnchorSink::Noop,
             default_actor: std::env::var("LEDGER_DEFAULT_ACTOR").ok(),
         }
     }
@@ -46,6 +57,13 @@ impl AppState {
     /// known actor string so assertions don't depend on env state.
     pub fn with_default_actor(mut self, actor: Option<String>) -> Self {
         self.default_actor = actor;
+        self
+    }
+
+    /// Swap in an anchor sink. Production: `AnchorSink::S3(..)`. Tests:
+    /// `AnchorSink::Memory(..)` so the uploaded manifest is readable.
+    pub fn with_anchor_sink(mut self, sink: AnchorSink) -> Self {
+        self.anchor_sink = sink;
         self
     }
 }
@@ -136,6 +154,11 @@ pub fn build_router(state: AppState) -> Router {
             post(routes::export_bundles::create),
         )
         .route("/export-bundles/{id}", get(routes::export_bundles::get))
+        .route(
+            "/anchors",
+            get(routes::anchors::list).post(routes::anchors::trigger),
+        )
+        .route("/anchors/{id}", get(routes::anchors::get))
         .route("/health", get(health))
         .layer(TraceLayer::new_for_http())
         .with_state(state)

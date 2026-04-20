@@ -1,3 +1,4 @@
+pub mod anchor;
 pub mod artifact;
 pub mod bias_slice;
 pub mod case;
@@ -15,6 +16,7 @@ pub mod run_version_binding;
 pub mod side_effect;
 pub mod tool_invocation;
 
+pub use anchor::Anchor;
 pub use artifact::Artifact;
 pub use bias_slice::{BiasSlice, CreateBiasSlice};
 pub use case::{Case, CreateCase};

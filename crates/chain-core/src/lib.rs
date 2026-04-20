@@ -71,6 +71,8 @@
 pub mod canonical_json;
 pub mod chain;
 pub mod encode;
+pub mod merkle;
 
 pub use chain::{compute_row_hash, CHAIN_DOMAIN, GENESIS_PREV};
 pub use encode::{canonical_row_bytes, CanonicalField, CanonicalValue, ROW_DOMAIN};
+pub use merkle::{compute_root, leaf_hash, node_hash, MERKLE_LEAF_DOMAIN, MERKLE_NODE_DOMAIN};
