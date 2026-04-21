@@ -29,7 +29,7 @@ You bring:
 | `trackward-postgres`    | `DATABASE_URL`                                               | ledger                 |
 | `trackward-s3`          | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`                 | ledger                 |
 | `trackward-ledger`      | `LEDGER_SIGNING_KEY_HEX`; `tls.crt`/`tls.key`/`ca.crt` if mTLS | ledger                 |
-| `trackward-gateway`     | `LEDGER_BEARER_TOKEN` (optional); `tls.crt`/`tls.key`/`ca.crt` if mTLS | gateway                |
+| `trackward-gateway`     | `tls.crt`/`tls.key`/`ca.crt` if mTLS                         | gateway                |
 
 `LEDGER_SIGNING_KEY_HEX` must be a 32-byte ed25519 seed hex-encoded
 (64 chars). Generate one with:
@@ -57,12 +57,20 @@ kubectl -n trackward create secret generic trackward-s3 \
   --from-literal=AWS_SECRET_ACCESS_KEY=...
 
 kubectl -n trackward create secret generic trackward-ledger \
+  --from-file=tls.crt=ledger.crt \
+  --from-file=tls.key=ledger.key \
+  --from-file=ca.crt=clients-ca.crt \
   --from-literal=LEDGER_SIGNING_KEY_HEX="$(openssl rand -hex 32)"
 
 kubectl -n trackward create secret generic trackward-gateway \
-  --from-literal=LEDGER_BEARER_TOKEN="$(openssl rand -hex 32)"
+  --from-file=tls.crt=gateway.crt \
+  --from-file=tls.key=gateway.key \
+  --from-file=ca.crt=clients-ca.crt
 
-# 2. Install the chart.
+# 2. Install the chart. mTLS is on by default; the chart refuses to
+#    render a deployment with no auth (mtls=false and
+#    auth.allowUnauthenticated=false) — see `auth.allowUnauthenticated`
+#    in values.yaml for the mesh-terminated escape hatch.
 helm install trackward deploy/helm/trackward \
   -n trackward \
   --set s3.bucket=my-trackward-artifacts \
@@ -84,17 +92,29 @@ helm upgrade trackward deploy/helm/trackward -n trackward \
   --set ledger.anchor.retainDays=2555
 ```
 
-## Enabling mTLS
+## Disabling mTLS (mesh-terminated deploys)
+
+mTLS is on by default. The ledger has no application-layer auth today,
+so the only thing standing between the pod and the network in plaintext
+mode is whatever sits in front of it. If a service mesh terminates mTLS
+above this chart and you've confirmed the pod never sees an
+unauthenticated request, you can flip it off:
 
 ```
 helm upgrade trackward deploy/helm/trackward -n trackward \
-  --set mtls.enabled=true
+  --set mtls.enabled=false \
+  --set auth.allowUnauthenticated=true
 ```
 
-Both secrets must carry the mTLS triple under keys `tls.crt`, `tls.key`,
-and `ca.crt`. When mTLS is enabled, the gateway dials the ledger over
-HTTPS and presents its own client cert; see `services/*/src/tls.rs` for
-the partial-config refusal behavior.
+The `auth.allowUnauthenticated=true` flag is intentional friction —
+leaving mTLS off without it makes `helm template` / `helm install` fail
+with an explanatory error, so the choice shows up in your values file
+rather than in a default.
+
+When mTLS is enabled (the default), both secrets must carry the triple
+under keys `tls.crt`, `tls.key`, and `ca.crt`. The gateway dials the
+ledger over HTTPS and presents its own client cert; see
+`services/*/src/tls.rs` for the partial-config refusal behavior.
 
 ## Upgrades
 
