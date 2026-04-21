@@ -1,0 +1,142 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "trackward.fullname" . }}-ledger
+  labels:
+    {{- include "trackward.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ledger
+spec:
+  replicas: {{ .Values.ledger.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "trackward.ledger.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "trackward.labels" . | nindent 8 }}
+        app.kubernetes.io/component: ledger
+      {{- with .Values.ledger.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: ledger
+          image: {{ include "trackward.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/usr/local/bin/ledger"]
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+          env:
+            - name: LISTEN_ADDR
+              value: "0.0.0.0:3000"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.postgres.existingSecret }}
+                  key: {{ .Values.postgres.secretKey }}
+            - name: LEDGER_SIGNING_KEY_HEX
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.ledger.existingSecret }}
+                  key: LEDGER_SIGNING_KEY_HEX
+            - name: S3_BUCKET
+              value: {{ .Values.s3.bucket | quote }}
+            - name: S3_REGION
+              value: {{ .Values.s3.region | quote }}
+            {{- with .Values.s3.endpoint }}
+            - name: S3_ENDPOINT
+              value: {{ . | quote }}
+            {{- end }}
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.s3.existingSecret }}
+                  key: AWS_ACCESS_KEY_ID
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.s3.existingSecret }}
+                  key: AWS_SECRET_ACCESS_KEY
+            {{- if .Values.ledger.anchor.enabled }}
+            - name: ANCHOR_BUCKET
+              value: {{ required "ledger.anchor.bucket is required when anchor.enabled=true" .Values.ledger.anchor.bucket | quote }}
+            - name: ANCHOR_INTERVAL_SECS
+              value: {{ .Values.ledger.anchor.intervalSecs | quote }}
+            - name: ANCHOR_RETAIN_DAYS
+              value: {{ .Values.ledger.anchor.retainDays | quote }}
+            - name: ANCHOR_S3_REGION
+              value: {{ .Values.ledger.anchor.s3Region | quote }}
+            {{- with .Values.ledger.anchor.s3Endpoint }}
+            - name: ANCHOR_S3_ENDPOINT
+              value: {{ . | quote }}
+            {{- end }}
+            {{- end }}
+            {{- if .Values.mtls.enabled }}
+            - name: TLS_CERT_PATH
+              value: /etc/trackward/tls/tls.crt
+            - name: TLS_KEY_PATH
+              value: /etc/trackward/tls/tls.key
+            - name: TLS_CLIENT_CA_PATH
+              value: /etc/trackward/tls/ca.crt
+            {{- end }}
+            {{- with .Values.ledger.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- if .Values.mtls.enabled }}
+          volumeMounts:
+            - name: tls
+              mountPath: /etc/trackward/tls
+              readOnly: true
+          {{- end }}
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+              {{- if .Values.mtls.enabled }}
+              scheme: HTTPS
+              {{- end }}
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+              {{- if .Values.mtls.enabled }}
+              scheme: HTTPS
+              {{- end }}
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.ledger.resources | nindent 12 }}
+      {{- if .Values.mtls.enabled }}
+      volumes:
+        - name: tls
+          secret:
+            secretName: {{ .Values.ledger.existingSecret }}
+            items:
+              - key: tls.crt
+                path: tls.crt
+              - key: tls.key
+                path: tls.key
+              - key: ca.crt
+                path: ca.crt
+      {{- end }}
+      {{- with .Values.ledger.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.ledger.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.ledger.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

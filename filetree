@@ -119,9 +119,25 @@ trackward/                            # audit-ready agent logging for full trace
       kms.tf
       iam.tf
 
+  deploy/
+    helm/
+      trackward/                       # one-command install; refuses to provision postgres/s3
+        Chart.yaml
+        values.yaml
+        README.md
+        templates/
+          _helpers.tpl
+          ledger-deployment.yaml
+          ledger-service.yaml
+          gateway-deployment.yaml
+          gateway-service.yaml
+          networkpolicy.yaml           # default-deny egress with gateway→ledger + DNS allowed
+          ingress.yaml                 # opt-in; most operators front this with their own mesh
+
   .github/
     workflows/
       test.yml
       prompt-regression.yml
       policy-validation.yml
+      helm-lint.yml
       deploy.yml

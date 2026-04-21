@@ -1,0 +1,136 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "trackward.fullname" . }}-gateway
+  labels:
+    {{- include "trackward.labels" . | nindent 4 }}
+    app.kubernetes.io/component: gateway
+spec:
+  replicas: {{ .Values.gateway.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "trackward.gateway.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "trackward.labels" . | nindent 8 }}
+        app.kubernetes.io/component: gateway
+      {{- with .Values.gateway.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: gateway
+          image: {{ include "trackward.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/usr/local/bin/gateway"]
+          ports:
+            - name: http
+              containerPort: 4000
+              protocol: TCP
+          env:
+            - name: GATEWAY_LISTEN_ADDR
+              value: "0.0.0.0:4000"
+            {{/*
+              When the ledger is served over mTLS, the gateway must dial it
+              over https — same port, different scheme. The in-cluster
+              service name is stable, so we wire it directly.
+            */}}
+            - name: LEDGER_URL
+              value: {{ printf "%s://%s-ledger:%d"
+                (ternary "https" "http" .Values.mtls.enabled)
+                (include "trackward.fullname" .)
+                (int .Values.ledger.service.port) | quote }}
+            - name: GATEWAY_SERVICE_ACCOUNT
+              value: {{ .Values.gateway.serviceAccount | quote }}
+            {{- with .Values.gateway.toolRoutes }}
+            - name: TOOL_ROUTES
+              value: {{ include "trackward.gateway.toolRoutes" $ | quote }}
+            {{- end }}
+            {{- with .Values.gateway.retrievalBackend }}
+            - name: RETRIEVAL_BACKEND
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .Values.gateway.gatedTools }}
+            - name: GATED_TOOLS
+              value: {{ join "," . | quote }}
+            {{- end }}
+            - name: LEDGER_BEARER_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.gateway.existingSecret }}
+                  key: LEDGER_BEARER_TOKEN
+                  optional: true
+            {{- if .Values.mtls.enabled }}
+            - name: TLS_CERT_PATH
+              value: /etc/trackward/tls/tls.crt
+            - name: TLS_KEY_PATH
+              value: /etc/trackward/tls/tls.key
+            - name: TLS_CLIENT_CA_PATH
+              value: /etc/trackward/tls/ca.crt
+            - name: LEDGER_CLIENT_CERT_PATH
+              value: /etc/trackward/tls/tls.crt
+            - name: LEDGER_CLIENT_KEY_PATH
+              value: /etc/trackward/tls/tls.key
+            - name: LEDGER_SERVER_CA_PATH
+              value: /etc/trackward/tls/ca.crt
+            {{- end }}
+            {{- with .Values.gateway.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- if .Values.mtls.enabled }}
+          volumeMounts:
+            - name: tls
+              mountPath: /etc/trackward/tls
+              readOnly: true
+          {{- end }}
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+              {{- if .Values.mtls.enabled }}
+              scheme: HTTPS
+              {{- end }}
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+              {{- if .Values.mtls.enabled }}
+              scheme: HTTPS
+              {{- end }}
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.gateway.resources | nindent 12 }}
+      {{- if .Values.mtls.enabled }}
+      volumes:
+        - name: tls
+          secret:
+            secretName: {{ .Values.gateway.existingSecret }}
+            items:
+              - key: tls.crt
+                path: tls.crt
+              - key: tls.key
+                path: tls.key
+              - key: ca.crt
+                path: ca.crt
+      {{- end }}
+      {{- with .Values.gateway.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.gateway.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.gateway.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
