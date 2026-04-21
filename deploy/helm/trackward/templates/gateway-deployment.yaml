@@ -1,3 +1,4 @@
+{{- include "trackward.authPostureGuard" . -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -60,12 +61,6 @@ spec:
             - name: GATED_TOOLS
               value: {{ join "," . | quote }}
             {{- end }}
-            - name: LEDGER_BEARER_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.gateway.existingSecret }}
-                  key: LEDGER_BEARER_TOKEN
-                  optional: true
             {{- if .Values.mtls.enabled }}
             - name: TLS_CERT_PATH
               value: /etc/trackward/tls/tls.crt
