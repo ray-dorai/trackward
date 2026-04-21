@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "trackward.fullname" . }}-ledger
+  labels:
+    {{- include "trackward.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ledger
+spec:
+  type: {{ .Values.ledger.service.type }}
+  ports:
+    - name: http
+      port: {{ .Values.ledger.service.port }}
+      targetPort: http
+      protocol: TCP
+  selector:
+    {{- include "trackward.ledger.selectorLabels" . | nindent 4 }}

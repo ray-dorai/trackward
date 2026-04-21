@@ -1,0 +1,63 @@
+name: helm-lint
+
+# Lint + render the chart on every PR that touches it. Catches typos, bad
+# references, and template errors before a human ever tries `helm install`.
+# Uses helm's own `template` step (no cluster) for a fast deterministic
+# check — a full kind-based install runs in release pipelines, not on PRs.
+
+on:
+  pull_request:
+    paths:
+      - "deploy/helm/**"
+      - ".github/workflows/helm-lint.yml"
+  push:
+    branches: [main]
+    paths:
+      - "deploy/helm/**"
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.14.4
+
+      - name: helm lint (defaults)
+        run: helm lint deploy/helm/trackward
+
+      - name: helm lint (mTLS + anchor enabled)
+        run: |
+          helm lint deploy/helm/trackward \
+            --set mtls.enabled=true \
+            --set ledger.anchor.enabled=true \
+            --set ledger.anchor.bucket=test-anchors
+
+      - name: helm template renders cleanly (defaults)
+        run: helm template trackward deploy/helm/trackward > /tmp/rendered-defaults.yaml
+
+      - name: helm template renders cleanly (mTLS + anchor + ingress)
+        run: |
+          helm template trackward deploy/helm/trackward \
+            --set mtls.enabled=true \
+            --set ledger.anchor.enabled=true \
+            --set ledger.anchor.bucket=test-anchors \
+            --set ingress.enabled=true \
+            --set ingress.className=nginx \
+            --set "ingress.hosts[0].host=trackward.example.com" \
+            --set "ingress.hosts[0].paths[0].path=/" \
+            --set "ingress.hosts[0].paths[0].pathType=Prefix" \
+            > /tmp/rendered-mtls.yaml
+
+      - name: Assert required-secret guardrails fire
+        run: |
+          # anchor.enabled=true without anchor.bucket must fail the render —
+          # the `required` function is the only thing standing between a
+          # misconfigured deploy and writing anchors into the artifact bucket.
+          if helm template trackward deploy/helm/trackward \
+              --set ledger.anchor.enabled=true 2>/dev/null; then
+            echo "::error::expected 'helm template' to fail when anchor.enabled=true but anchor.bucket is empty"
+            exit 1
+          fi

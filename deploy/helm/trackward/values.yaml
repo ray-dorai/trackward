@@ -1,0 +1,135 @@
+# Default values for trackward.
+#
+# This file is the contract between the chart and the operator. If a knob
+# isn't exposed here, it's either not intended to be customized or it
+# belongs in the secret referenced below. Prefer `--set` or a values
+# override file over editing this in place.
+#
+# Nothing here bootstraps Postgres or S3 — both are expected to be
+# customer-managed, with connection details supplied via the secrets
+# this chart references. Treat this chart as "wire the two Rust
+# services to stores you already run".
+
+# -- Override the chart name for resource prefixing. Defaults to the release name.
+nameOverride: ""
+fullnameOverride: ""
+
+image:
+  # -- Registry + repository prefix. Full image is
+  # `{{ .registry }}/{{ .repository }}:{{ .tag }}`.
+  registry: ghcr.io
+  repository: ray-dorai/trackward
+  # -- Image tag. Keep in sync with `appVersion` in Chart.yaml.
+  tag: "0.1.0"
+  # -- Image pull policy. `IfNotPresent` keeps air-gapped installs predictable.
+  pullPolicy: IfNotPresent
+  pullSecrets: []
+
+# -- Whether this install terminates TLS on the pods themselves (true) or
+# at the ingress / service mesh (false). When true the chart expects cert
+# material in the secrets referenced below and ledger/gateway bind via
+# rustls; when false they bind plaintext and the mesh terminates.
+mtls:
+  enabled: false
+
+ledger:
+  replicaCount: 2
+  # -- Bearer token (legacy) accepted on ledger writes. Read from the
+  # secret named in `ledger.existingSecret` under key
+  # `LEDGER_BEARER_TOKEN`. If your install uses mTLS only, leave the key
+  # absent; the ledger doesn't require the bearer on the route side yet.
+  existingSecret: trackward-ledger
+  service:
+    type: ClusterIP
+    port: 3000
+  # -- Additional container env. Merged over the chart's built-in set.
+  # Keys present here win over the defaults.
+  extraEnv: []
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 1
+      memory: 1Gi
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  anchor:
+    # -- Enable the global merkle-anchor loop. When true the ledger
+    # writes signed manifests to `anchor.bucket` every `intervalSecs`.
+    enabled: false
+    bucket: ""
+    intervalSecs: 60
+    retainDays: 2555
+    # -- Optional endpoint override (e.g. for non-AWS S3 like MinIO).
+    s3Endpoint: ""
+    s3Region: "us-east-1"
+
+gateway:
+  replicaCount: 2
+  # -- Bearer token the gateway uses when calling the ledger. Read from
+  # the secret named in `gateway.existingSecret` under key
+  # `LEDGER_BEARER_TOKEN`. If empty, the gateway falls back to mTLS /
+  # unauthenticated depending on `mtls.enabled`.
+  existingSecret: trackward-gateway
+  service:
+    type: ClusterIP
+    port: 4000
+  extraEnv: []
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  # -- Service account identity this gateway stamps ledger writes with.
+  serviceAccount: gateway
+  # -- Tool name → backend URL map, serialized as the `TOOL_ROUTES` env var.
+  toolRoutes: {}
+  retrievalBackend: ""
+  gatedTools: []
+
+# -- Postgres connection URL. Must include credentials. This chart does
+# not provision Postgres; point it at an RDS / Cloud SQL / self-hosted
+# cluster and make sure the `trackward` database exists.
+# Read from `postgres.existingSecret[postgres.secretKey]` at runtime.
+postgres:
+  existingSecret: trackward-postgres
+  secretKey: DATABASE_URL
+
+# -- Artifact bucket for blob storage (not the anchor WORM bucket).
+s3:
+  existingSecret: trackward-s3
+  bucket: trackward-artifacts
+  region: us-east-1
+  # -- Optional endpoint override (e.g. for non-AWS S3).
+  endpoint: ""
+
+# -- Egress policy. When true, apply a default-deny NetworkPolicy that
+# lets the ledger talk to Postgres, the artifact bucket, and the
+# anchor bucket, and lets the gateway talk to the ledger. Everything
+# else is blocked. Keep true unless you already have a cluster-wide
+# egress policy and want to layer your own.
+networkPolicy:
+  enabled: true
+  # -- Egress allowlist. Each entry is a `to:` block as accepted by a
+  # NetworkPolicy. By default the chart emits a minimal set that
+  # covers same-namespace DNS + API; customize for your store endpoints.
+  egress: []
+
+# -- Optional ingress. Customers typically provide their own ingress or
+# service-mesh gateway in front of the gateway service. Leave disabled
+# unless you want this chart to own it.
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts: []
+  tls: []

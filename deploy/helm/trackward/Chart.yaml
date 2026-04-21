@@ -1,0 +1,23 @@
+apiVersion: v2
+name: trackward
+description: |
+  Cryptographically append-only audit ledger + gateway for AI agent runs.
+  This chart installs the two Rust services (ledger, gateway) and the
+  Kubernetes glue around them. It does NOT install Postgres or S3 —
+  trackward is designed to run against customer-managed durable stores
+  and refuses to pretend otherwise.
+type: application
+version: 0.1.0
+# appVersion tracks the git tag of the images this chart ships against.
+# Keep in sync with `.image.tag` in values.yaml.
+appVersion: "0.1.0"
+keywords:
+  - audit
+  - llm
+  - compliance
+  - agent
+home: https://github.com/ray-dorai/trackward
+sources:
+  - https://github.com/ray-dorai/trackward
+maintainers:
+  - name: trackward

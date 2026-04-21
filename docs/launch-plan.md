@@ -105,14 +105,18 @@ Branch: `phase-11/helm`.
 40. `deploy/helm/trackward/templates/_helpers.tpl`
 41. `templates/ledger-deployment.yaml`
 42. `templates/ledger-service.yaml`
-43. `templates/ledger-secret.yaml`
-44. `templates/gateway-deployment.yaml`
-45. `templates/gateway-service.yaml`
-46. `templates/gateway-secret.yaml`
-47. `templates/networkpolicy.yaml` — deny egress except postgres, S3, anchor bucket; explicit gateway→ledger
-48. `templates/ingress.yaml` (optional; usually customer-provided)
-49. `deploy/helm/trackward/README.md` — prereqs, install, upgrade, rollback
-50. `.github/workflows/helm-lint.yml` — `helm lint` + kind-based install test on PR
+43. `templates/gateway-deployment.yaml`
+44. `templates/gateway-service.yaml`
+45. `templates/networkpolicy.yaml` — deny egress except postgres, S3, anchor bucket; explicit gateway→ledger
+46. `templates/ingress.yaml` (optional; usually customer-provided)
+47. `deploy/helm/trackward/README.md` — prereqs, install, upgrade, rollback
+48. `.github/workflows/helm-lint.yml` — `helm lint` + render checks on PR
+
+(Intentionally no `ledger-secret.yaml` / `gateway-secret.yaml`: this
+chart references customer-managed secrets by name via
+`existingSecret` so key material stays out of the chart. Secret
+bootstrap belongs to whatever the operator already uses — Sealed
+Secrets, External Secrets, SOPS, Vault CSI, …)
 
 ## Phase 12 — operational drills + runbooks (~1 week)
 
