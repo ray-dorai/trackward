@@ -52,7 +52,7 @@ jobs:
       AWS_SECRET_ACCESS_KEY: minioadmin
       # Integration tests assume the ledger signing key is stable so
       # their assertions against signed manifests are reproducible.
-      LEDGER_SIGNING_KEY_HEX: 0000000000000000000000000000000000000000000000000000000000000001
+      LEDGER_SIGNING_KEY_HEX: "0000000000000000000000000000000000000000000000000000000000000001"
       RUST_BACKTRACE: "1"
 
     steps:
