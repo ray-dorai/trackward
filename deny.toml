@@ -23,24 +23,12 @@ version = 2
 # Deny anything with a RustSec advisory. Yank a known-good commit if this
 # ever breaks a release — do not suppress.
 yanked = "deny"
-ignore = [
-    # Both advisories are against rustls-webpki 0.101.7 / rustls 0.21.12 and
-    # concern certificate name-constraint validation, reachable only through
-    # inbound client-certificate verification.
-    #
-    # Phase 10 added inbound mTLS to ledger/gateway, but it runs on rustls
-    # 0.23 (a separate, unaffected stack). The 0.21 stack remains in our
-    # tree solely because aws-smithy-http-client v1.1.12 still pins it;
-    # confirm with `cargo tree -i rustls@0.21.12`. That path is outbound to
-    # AWS endpoints, server-auth only — the vulnerable code path is not
-    # reached.
-    #
-    # Clear these when aws-smithy-http-client drops rustls 0.21. Until
-    # then, the suppression is load-bearing and honest. Revisit if we ever
-    # introduce inbound TLS on the 0.21 stack (we should not).
-    { id = "RUSTSEC-2026-0098", reason = "rustls 0.21 lingers via aws-smithy-http-client; outbound server-auth only, vulnerable path unreachable" },
-    { id = "RUSTSEC-2026-0099", reason = "rustls 0.21 lingers via aws-smithy-http-client; outbound server-auth only, vulnerable path unreachable" },
-]
+# No ignores. AGENTS.md rule: ignores must carry honest justifications, and
+# every ignore must correspond to a currently-firing advisory in this tree.
+# When a real advisory fires, fix the cause first; only add an ignore if the
+# fix is genuinely upstream and out of reach, with a justification that
+# names the upstream blocker and the condition for clearing.
+ignore = []
 
 [licenses]
 version = 2
