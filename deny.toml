@@ -24,15 +24,22 @@ version = 2
 # ever breaks a release — do not suppress.
 yanked = "deny"
 ignore = [
-    # rustls-webpki 0.101.7 is pulled transitively via aws-sdk → rustls 0.21.
-    # Both advisories concern certificate name-constraint validation, which
-    # is only reachable through inbound client-certificate verification.
-    # Today we use TLS only for outbound to S3 (server-auth, pinned by the
-    # AWS SDK). These become reachable when Phase 10 adds mTLS on the
-    # ledger/gateway; Phase 10 will upgrade the rustls stack and clear
-    # these entries. Revisit if the outbound surface changes.
-    { id = "RUSTSEC-2026-0098", reason = "not reachable: outbound S3 TLS only; clear when Phase 10 upgrades rustls" },
-    { id = "RUSTSEC-2026-0099", reason = "not reachable: outbound S3 TLS only; clear when Phase 10 upgrades rustls" },
+    # Both advisories are against rustls-webpki 0.101.7 / rustls 0.21.12 and
+    # concern certificate name-constraint validation, reachable only through
+    # inbound client-certificate verification.
+    #
+    # Phase 10 added inbound mTLS to ledger/gateway, but it runs on rustls
+    # 0.23 (a separate, unaffected stack). The 0.21 stack remains in our
+    # tree solely because aws-smithy-http-client v1.1.12 still pins it;
+    # confirm with `cargo tree -i rustls@0.21.12`. That path is outbound to
+    # AWS endpoints, server-auth only — the vulnerable code path is not
+    # reached.
+    #
+    # Clear these when aws-smithy-http-client drops rustls 0.21. Until
+    # then, the suppression is load-bearing and honest. Revisit if we ever
+    # introduce inbound TLS on the 0.21 stack (we should not).
+    { id = "RUSTSEC-2026-0098", reason = "rustls 0.21 lingers via aws-smithy-http-client; outbound server-auth only, vulnerable path unreachable" },
+    { id = "RUSTSEC-2026-0099", reason = "rustls 0.21 lingers via aws-smithy-http-client; outbound server-auth only, vulnerable path unreachable" },
 ]
 
 [licenses]
