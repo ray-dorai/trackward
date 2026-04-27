@@ -33,5 +33,9 @@ rand = "0.8"
 rand_core = "0.6"
 axum-server = { version = "0.7", features = ["tls-rustls"] }
 rustls = "0.23"
-rustls-pemfile = "2"
+# PEM parsing routes through `rustls_pki_types::pem::PemObject`; the
+# former `rustls-pemfile` dep is RustSec-flagged unmaintained and
+# `PemObject` is its sanctioned successor (already in our tree via
+# rustls 0.23).
+rustls-pki-types = { version = "1", features = ["alloc", "std"] }
 rcgen = "0.13"
