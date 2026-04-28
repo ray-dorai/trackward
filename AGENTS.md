@@ -14,7 +14,7 @@ Cargo workspace (`resolver = "2"`):
 - `infra/otel/`, `infra/aws/` — OTLP collector config, AWS infra notes.
 - `registry/{prompts,policies,evals}/` — Versioned prompt/policy/eval definitions consumed by the gateway.
 - `docs/launch-plan.md` — Phase-by-phase roadmap. **Authoritative for "why this phase, why now".**
-- `.github/workflows/` — `security.yml` (cargo audit + cargo deny + SBOM) and test gates. `deny.toml` advisory ignores must carry honest justifications.
+- `.github/workflows/` — `security.yml` (cargo deny — single source of truth for advisories, licenses, registries, git sources) and test gates. `deny.toml` advisory ignores must carry honest justifications.
 
 ## Intent Layer
 
@@ -31,7 +31,7 @@ Cargo workspace (`resolver = "2"`):
 - **One canonical hash format.** All canonical-bytes and row-hash logic lives in `crates/chain-core/`. Ledger and verifier both depend on it. Never reimplement canonicalization elsewhere — divergence silently breaks verification.
 - **Hash-chain integrity.** `prev_hash` / `row_hash` writes use `SELECT … FOR UPDATE` on the last row of `(table, run_id)` inside the same transaction as the insert. Don't shortcut the lock.
 - **Anchors are signed and WORM.** Merkle roots over `(anchored_from, anchored_to)` are signed (ed25519) and persisted to an S3 object-lock bucket. Restart resumes from the last anchored seq.
-- **Supply-chain audit trail is part of the product.** `cargo audit` + `cargo deny check` run on every PR. If `deny.toml` ignores an advisory, the justification must reflect the *actual* reason (transitive dep we don't control, etc.) — not aspirational future work. Audit honesty is a hard rule, not a style preference.
+- **Supply-chain audit trail is part of the product.** `cargo deny check` runs on every PR (and daily against `main`). It is the single source of truth — one tool, one config (`deny.toml`), one place to keep honest. If `deny.toml` ignores an advisory, the justification must reflect the *actual* reason (transitive dep we don't control, etc.) — not aspirational future work. Audit honesty is a hard rule, not a style preference.
 - **CI gates are honored, not routed around.** PRs gated on `cargo test`; deploys gated on auth posture. If a gate trips, fix the cause; don't loosen the gate.
 - **TLS via rustls 0.23 stack.** PEM parsing goes through `rustls_pki_types::pem::PemObject` (the sanctioned successor to the unmaintained `rustls-pemfile`).
 
