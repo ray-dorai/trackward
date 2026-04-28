@@ -93,7 +93,11 @@ async fn tool_call_binds_run_to_registered_versions() {
         prompt["content_hash"].as_str().unwrap().len() == 64,
         "content_hash must be a 64-char sha256 hex"
     );
-    assert_eq!(prompt["git_sha"], "test-sha-0000000000000000000000000000000000");
+    // Intentionally no git_sha assertion: the registry de-dups on
+    // (workflow, version, content_hash), so when another test registers
+    // the same fixture first, the row keeps that test's git_sha. See
+    // `content_hash_is_deterministic_across_runs` below — that dedup is
+    // the feature, not a bug.
 }
 
 #[tokio::test]

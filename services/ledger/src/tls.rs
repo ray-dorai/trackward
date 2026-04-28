@@ -27,11 +27,10 @@
 //! [`TlsError`] and is fatal at startup. A misconfigured TLS stack should
 //! take the process down on boot rather than limp along in plaintext.
 
-use std::fs;
-use std::io::BufReader;
 use std::path::Path;
 use std::sync::Arc;
 
+use rustls::pki_types::pem::PemObject;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use rustls::server::WebPkiClientVerifier;
 use rustls::{RootCertStore, ServerConfig};
@@ -76,33 +75,27 @@ pub fn load_rustls_config(
 }
 
 fn read_cert_chain(path: &Path) -> Result<Vec<CertificateDer<'static>>, TlsError> {
-    let mut reader = BufReader::new(
-        fs::File::open(path).map_err(|e| TlsError::Io(path.display().to_string(), e))?,
-    );
-    rustls_pemfile::certs(&mut reader)
+    CertificateDer::pem_file_iter(path)
+        .map_err(|e| TlsError::Parse(path.display().to_string(), e.to_string()))?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| TlsError::Parse(path.display().to_string(), e.to_string()))
 }
 
 fn read_private_key(path: &Path) -> Result<PrivateKeyDer<'static>, TlsError> {
-    let mut reader = BufReader::new(
-        fs::File::open(path).map_err(|e| TlsError::Io(path.display().to_string(), e))?,
-    );
-    match rustls_pemfile::private_key(&mut reader)
-        .map_err(|e| TlsError::Parse(path.display().to_string(), e.to_string()))?
-    {
-        Some(k) => Ok(k),
-        None => Err(TlsError::NoPrivateKey(path.display().to_string())),
-    }
+    PrivateKeyDer::from_pem_file(path).map_err(|e| match e {
+        rustls::pki_types::pem::Error::NoItemsFound => {
+            TlsError::NoPrivateKey(path.display().to_string())
+        }
+        other => TlsError::Parse(path.display().to_string(), other.to_string()),
+    })
 }
 
 fn read_client_ca(path: &Path) -> Result<RootCertStore, TlsError> {
-    let mut reader = BufReader::new(
-        fs::File::open(path).map_err(|e| TlsError::Io(path.display().to_string(), e))?,
-    );
     let mut store = RootCertStore::empty();
     let mut added = 0usize;
-    for item in rustls_pemfile::certs(&mut reader) {
+    for item in CertificateDer::pem_file_iter(path)
+        .map_err(|e| TlsError::Parse(path.display().to_string(), e.to_string()))?
+    {
         let cert = item.map_err(|e| TlsError::Parse(path.display().to_string(), e.to_string()))?;
         store
             .add(cert)

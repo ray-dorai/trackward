@@ -1,0 +1,100 @@
+name: test
+
+# Gates every PR and every push to main on the full Rust test suite.
+#
+# Without this, the 5k+ lines of integration tests in services/ledger/tests
+# and services/gateway/tests don't actually protect main — a change that
+# breaks the hash-chain invariants, the anchor-signing path, or the
+# actor-propagation contract can merge silently. The whole audit story
+# rests on those invariants, so they get a mandatory CI gate.
+#
+# Tests need a real Postgres (migrations + triggers + FK behavior under
+# test) and a real S3 (the blob store is part of the evidence surface).
+# Mocks would let divergence between "what tests exercise" and "what the
+# binaries actually do" accumulate; we deliberately pay the CI minutes
+# for that fidelity instead.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  cargo-test:
+    name: cargo test --workspace
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    # MinIO needs `server /data` as its CMD which GHA's `services:` syntax
+    # can't override, so we start it as a plain `docker run` step below
+    # and only use `services:` for Postgres.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: trackward
+          POSTGRES_PASSWORD: trackward
+          POSTGRES_DB: trackward
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U trackward"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 15
+
+    env:
+      DATABASE_URL: postgres://trackward:trackward@localhost:5432/trackward?sslmode=disable
+      S3_BUCKET: trackward-artifacts
+      S3_ENDPOINT: http://localhost:9000
+      S3_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
+      # Integration tests assume the ledger signing key is stable so
+      # their assertions against signed manifests are reproducible.
+      LEDGER_SIGNING_KEY_HEX: "0000000000000000000000000000000000000000000000000000000000000001"
+      RUST_BACKTRACE: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Start MinIO
+        run: |
+          docker run -d --name minio \
+            -p 9000:9000 \
+            -e MINIO_ROOT_USER=minioadmin \
+            -e MINIO_ROOT_PASSWORD=minioadmin \
+            minio/minio:latest server /data
+
+      - name: Wait for MinIO
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:9000/minio/health/live >/dev/null; then
+              echo "MinIO ready"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "MinIO did not become ready in time"
+          docker logs minio || true
+          exit 1
+
+      - name: Create buckets
+        run: |
+          for bucket in trackward-artifacts trackward-anchors; do
+            docker run --rm --network host \
+              -e MC_HOST_local=http://minioadmin:minioadmin@localhost:9000 \
+              minio/mc:latest \
+              mb --ignore-existing "local/$bucket"
+          done
+
+      - name: cargo test --workspace
+        # Single-threaded because several integration tests mutate the
+        # same Postgres database without explicit per-test namespacing.
+        # Parallel runs interleave INSERTs and break row-count asserts.
+        # Cheaper than retrofitting test isolation.
+        run: cargo test --workspace --all-targets -- --test-threads=1

@@ -29,15 +29,32 @@ image:
 # at the ingress / service mesh (false). When true the chart expects cert
 # material in the secrets referenced below and ledger/gateway bind via
 # rustls; when false they bind plaintext and the mesh terminates.
+#
+# Defaults to true because the ledger currently has no application-layer
+# auth — turning mTLS off means the pod accepts unauthenticated writes,
+# which is only safe behind a mesh that itself enforces mTLS one layer
+# up. See `auth.allowUnauthenticated`.
 mtls:
-  enabled: false
+  enabled: true
+
+# -- Auth posture. Together with `mtls.enabled`, this is the chart's
+# belt-and-suspenders against rendering a silently-open ledger. If mTLS
+# is disabled, an operator must explicitly flip `allowUnauthenticated`
+# to true so the choice appears in their values file rather than hiding
+# in a default.
+auth:
+  # When mTLS is off AND this is false, `helm template` / `helm install`
+  # fails with an explanatory error. Set true only if a mesh (Istio /
+  # Linkerd / a customer-owned gateway) terminates mTLS in front of the
+  # pods and you've satisfied yourself that the pod never sees an
+  # unauthenticated request.
+  allowUnauthenticated: false
 
 ledger:
   replicaCount: 2
-  # -- Bearer token (legacy) accepted on ledger writes. Read from the
-  # secret named in `ledger.existingSecret` under key
-  # `LEDGER_BEARER_TOKEN`. If your install uses mTLS only, leave the key
-  # absent; the ledger doesn't require the bearer on the route side yet.
+  # -- Secret holding ledger-owned material. Must carry
+  # `LEDGER_SIGNING_KEY_HEX` (32-byte ed25519 seed hex-encoded), and
+  # when `mtls.enabled=true`, the keys `tls.crt`, `tls.key`, `ca.crt`.
   existingSecret: trackward-ledger
   service:
     type: ClusterIP
@@ -69,10 +86,10 @@ ledger:
 
 gateway:
   replicaCount: 2
-  # -- Bearer token the gateway uses when calling the ledger. Read from
-  # the secret named in `gateway.existingSecret` under key
-  # `LEDGER_BEARER_TOKEN`. If empty, the gateway falls back to mTLS /
-  # unauthenticated depending on `mtls.enabled`.
+  # -- Secret holding gateway-owned material. When `mtls.enabled=true`
+  # it must carry `tls.crt`, `tls.key`, `ca.crt` — the gateway presents
+  # these to the ledger and accepts client connections against the same
+  # CA bundle. No other keys are required today.
   existingSecret: trackward-gateway
   service:
     type: ClusterIP

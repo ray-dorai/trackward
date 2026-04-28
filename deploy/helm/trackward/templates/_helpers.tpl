@@ -63,3 +63,20 @@ gateway's TOOL_ROUTES env parser expects.
 {{- end -}}
 {{- join "," $parts -}}
 {{- end -}}
+
+{{/*
+Deploy-time auth-posture assertion. The ledger has no application-layer
+auth today; mTLS is the only thing standing between the pod and the
+network. Rendering a chart with mtls.enabled=false therefore requires
+an explicit acknowledgment via auth.allowUnauthenticated=true. A mesh
+that terminates mTLS above the chart is a valid reason to set that
+flag; "we didn't get around to provisioning certs" is not.
+
+Include this helper once at the top of every workload template so the
+failure surfaces on any `helm template` / `helm install`.
+*/}}
+{{- define "trackward.authPostureGuard" -}}
+{{- if and (not .Values.mtls.enabled) (not .Values.auth.allowUnauthenticated) -}}
+{{- fail "refusing to render: mtls.enabled=false without auth.allowUnauthenticated=true. Either enable mTLS (recommended) or explicitly opt into unauthenticated mode via --set auth.allowUnauthenticated=true (only safe behind a mesh that itself terminates mTLS)." -}}
+{{- end -}}
+{{- end -}}

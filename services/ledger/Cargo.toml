@@ -30,7 +30,7 @@ rand = { workspace = true }
 rand_core = { workspace = true }
 axum-server = { workspace = true }
 rustls = { workspace = true }
-rustls-pemfile = { workspace = true }
+rustls-pki-types = { workspace = true }
 
 [dev-dependencies]
 reqwest = { workspace = true }

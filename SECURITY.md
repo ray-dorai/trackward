@@ -48,7 +48,7 @@ report, we'll explain why.
 
 - Vulnerabilities in third-party dependencies already disclosed upstream —
   please report those to the upstream project (we track them via
-  `cargo audit` in CI and will ship updates).
+  `cargo deny check` in CI and will ship updates).
 - Social engineering, physical attacks, DoS by resource exhaustion from
   a legitimately-authenticated client.
 - Findings against a customer's own deployment that turn out to be

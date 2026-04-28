@@ -23,16 +23,29 @@ version = 2
 # Deny anything with a RustSec advisory. Yank a known-good commit if this
 # ever breaks a release — do not suppress.
 yanked = "deny"
+# AGENTS.md rule: ignores must carry honest justifications, and every ignore
+# must correspond to a currently-firing advisory in this tree. Fix the cause
+# first; only ignore when the fix is upstream and out of reach.
+#
+# All four entries below trace to aws-smithy-http-client v1.1.12 still
+# pinning rustls 0.21.12 / rustls-webpki 0.101.7 / rustls-pemfile. Confirm
+# with `cargo tree -i rustls@0.21.12`. That dependency path is outbound
+# only (server-auth to AWS S3/STS/SSO endpoints); none of these advisories
+# are reachable through it. Clear when aws-smithy-http-client upgrades.
 ignore = [
-    # rustls-webpki 0.101.7 is pulled transitively via aws-sdk → rustls 0.21.
-    # Both advisories concern certificate name-constraint validation, which
-    # is only reachable through inbound client-certificate verification.
-    # Today we use TLS only for outbound to S3 (server-auth, pinned by the
-    # AWS SDK). These become reachable when Phase 10 adds mTLS on the
-    # ledger/gateway; Phase 10 will upgrade the rustls stack and clear
-    # these entries. Revisit if the outbound surface changes.
-    { id = "RUSTSEC-2026-0098", reason = "not reachable: outbound S3 TLS only; clear when Phase 10 upgrades rustls" },
-    { id = "RUSTSEC-2026-0099", reason = "not reachable: outbound S3 TLS only; clear when Phase 10 upgrades rustls" },
+    # rustls-pemfile is archived. Our own code uses rustls_pki_types::pem::PemObject
+    # (the sanctioned successor); rustls-pemfile remains in the tree only because
+    # axum-server v0.7.3 still pulls it transitively. No upstream fix path today.
+    { id = "RUSTSEC-2025-0134", reason = "rustls-pemfile transitive via axum-server v0.7.3; our code uses PemObject directly" },
+    # Webpki name-constraint advisories. Fixed in rustls-webpki >=0.103.12, which
+    # we already use on the new (rustls 0.23) stack. Only the old 0.101.7 path
+    # via aws-smithy-http-client still trips these.
+    { id = "RUSTSEC-2026-0098", reason = "rustls-webpki 0.101.7 transitive via aws-smithy-http-client; outbound AWS server-auth only, vulnerable name-constraint path unreachable" },
+    { id = "RUSTSEC-2026-0099", reason = "rustls-webpki 0.101.7 transitive via aws-smithy-http-client; outbound AWS server-auth only, vulnerable name-constraint path unreachable" },
+    # CRL-parse panic. Fixed in rustls-webpki >=0.103.13 — we bumped on the new
+    # stack. The old 0.101.7 transitive path remains, but: the advisory itself
+    # notes "Applications that do not use CRLs are not affected", and we do not.
+    { id = "RUSTSEC-2026-0104", reason = "rustls-webpki 0.101.7 transitive via aws-smithy-http-client; advisory states applications not using CRLs are unaffected, and we do not parse CRLs anywhere" },
 ]
 
 [licenses]

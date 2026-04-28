@@ -158,7 +158,7 @@ Explicitly deferred to Stage 2 (when a design partner pulls them):
 ## Shape of done
 
 Stage 1 is complete when:
-- `cargo audit` + `cargo deny` clean in CI
+- `cargo deny check` clean in CI (single source of truth for advisories + licenses + sources)
 - Every row in the ledger chains cryptographically to its predecessor in the
   same run, and every such chain terminates at a signed merkle root published
   to an externally-durable location

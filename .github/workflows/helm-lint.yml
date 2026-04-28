@@ -25,13 +25,18 @@ jobs:
         with:
           version: v3.14.4
 
-      - name: helm lint (defaults)
+      - name: helm lint (defaults — mTLS on)
         run: helm lint deploy/helm/trackward
+
+      - name: helm lint (mesh-terminated deploy — mTLS off, auth opt-in)
+        run: |
+          helm lint deploy/helm/trackward \
+            --set mtls.enabled=false \
+            --set auth.allowUnauthenticated=true
 
       - name: helm lint (mTLS + anchor enabled)
         run: |
           helm lint deploy/helm/trackward \
-            --set mtls.enabled=true \
             --set ledger.anchor.enabled=true \
             --set ledger.anchor.bucket=test-anchors
 
@@ -41,7 +46,6 @@ jobs:
       - name: helm template renders cleanly (mTLS + anchor + ingress)
         run: |
           helm template trackward deploy/helm/trackward \
-            --set mtls.enabled=true \
             --set ledger.anchor.enabled=true \
             --set ledger.anchor.bucket=test-anchors \
             --set ingress.enabled=true \
@@ -51,7 +55,7 @@ jobs:
             --set "ingress.hosts[0].paths[0].pathType=Prefix" \
             > /tmp/rendered-mtls.yaml
 
-      - name: Assert required-secret guardrails fire
+      - name: Assert anchor guardrail fires
         run: |
           # anchor.enabled=true without anchor.bucket must fail the render —
           # the `required` function is the only thing standing between a
@@ -59,5 +63,17 @@ jobs:
           if helm template trackward deploy/helm/trackward \
               --set ledger.anchor.enabled=true 2>/dev/null; then
             echo "::error::expected 'helm template' to fail when anchor.enabled=true but anchor.bucket is empty"
+            exit 1
+          fi
+
+      - name: Assert auth-posture guardrail fires
+        run: |
+          # mtls.enabled=false + auth.allowUnauthenticated=false must fail
+          # the render. This guard is what protects against shipping a
+          # ledger that accepts unauthenticated writes simply because
+          # someone forgot to configure certs.
+          if helm template trackward deploy/helm/trackward \
+              --set mtls.enabled=false 2>/dev/null; then
+            echo "::error::expected 'helm template' to fail when mtls.enabled=false without auth.allowUnauthenticated=true"
             exit 1
           fi
