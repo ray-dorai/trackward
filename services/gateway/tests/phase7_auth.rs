@@ -28,6 +28,9 @@ async fn spawn_gateway_with_tokens(
         retrieval_backend: None,
         gated_tools: vec![],
         registry: RegistryBinding::default(),
+        service_account: "gateway-test".into(),
+        tls: None,
+        ledger_client_tls: None,
         auth_token,
         ledger_token,
     };
