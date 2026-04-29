@@ -1,0 +1,67 @@
+{
+  "_comment": "Drop these hooks into ~/.claude/settings.json (or .claude/settings.json for per-project) to record every Claude Code session in Trackward. Adjust the absolute paths to wherever this repo is checked out. The TRACKWARD_LEDGER_URL / TRACKWARD_ACTOR / TRACKWARD_LEDGER_TOKEN env vars override defaults; pass them via your shell profile or systemd.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/PATH/TO/trackward/examples/claude-code/hooks/trackward-session-start.sh"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/PATH/TO/trackward/examples/claude-code/hooks/trackward-user-prompt.sh"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/PATH/TO/trackward/examples/claude-code/hooks/trackward-pre-tool.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/PATH/TO/trackward/examples/claude-code/hooks/trackward-post-tool.sh"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/PATH/TO/trackward/examples/claude-code/hooks/trackward-stop.sh"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/PATH/TO/trackward/examples/claude-code/hooks/trackward-session-end.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
