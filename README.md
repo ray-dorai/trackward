@@ -16,6 +16,11 @@ signed chain of events, tool invocations, side effects, guardrail decisions,
 human approvals, and artifacts. Investigators can export a **signed dossier
 bundle** for any case and verify it offline with the `verifier` CLI.
 
+**Wiring an agent (Codex, internal harnesses, etc.):** see
+[docs/integrate-an-agent.md](docs/integrate-an-agent.md). Run
+[`scripts/demo-agent-run.sh`](scripts/demo-agent-run.sh) for an end-to-end
+demo against `docker-compose`.
+
 ## Services
 
 - `services/ledger` — Postgres-backed append-only store. Signs export bundles
