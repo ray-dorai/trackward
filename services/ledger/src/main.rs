@@ -26,6 +26,11 @@ async fn main() {
 
     let state = AppState::new(pool.clone(), blob_store).with_anchor_sink(anchor_sink.clone());
 
+    tracing::info!(
+        key_id = %state.signing.key_id,
+        "ledger signing key loaded — pin this in verifiers"
+    );
+
     if let Some(cfg) = &config.anchor {
         ledger::anchoring::spawn_global_loop(
             pool,

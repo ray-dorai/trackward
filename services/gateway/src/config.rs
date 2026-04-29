@@ -31,6 +31,12 @@ pub struct Config {
     /// `LEDGER_CLIENT_CERT_PATH`, `LEDGER_CLIENT_KEY_PATH`,
     /// `LEDGER_SERVER_CA_PATH` must be set to enable.
     pub ledger_client_tls: Option<LedgerClientTls>,
+    /// Bearer token required on the gateway's own tool/retrieve/approval
+    /// endpoints. None disables the check (dev default).
+    pub auth_token: Option<String>,
+    /// Bearer token the gateway presents when talking to the ledger. None
+    /// means no Authorization header is sent (works against an unlocked ledger).
+    pub ledger_token: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -97,6 +103,8 @@ impl Config {
                 .unwrap_or_else(|_| "gateway".into()),
             tls: TlsPaths::from_env(),
             ledger_client_tls: LedgerClientTls::from_env(),
+            auth_token: env::var("GATEWAY_AUTH_TOKEN").ok().filter(|s| !s.is_empty()),
+            ledger_token: env::var("LEDGER_CLIENT_TOKEN").ok().filter(|s| !s.is_empty()),
         }
     }
 
