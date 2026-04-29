@@ -16,7 +16,8 @@ async fn spawn_with_token(token: Option<&str>) -> String {
     let pool = ledger::db::connect(&config).await.unwrap();
     let blob_store = BlobStore::new(&config).await;
     let state = AppState::new(pool, blob_store)
-        .with_auth_token(token.map(|s| s.to_string()));
+        .with_auth_token(token.map(|s| s.to_string()))
+        .with_default_actor(Some("phase7-test".into()));
     let app = build_router(state);
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();

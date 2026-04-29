@@ -54,7 +54,8 @@ async fn spawn_ledger_with_token(token: Option<&str>) -> String {
     let pool = ledger::db::connect(&config).await.unwrap();
     let blob_store = ledger::s3::BlobStore::new(&config).await;
     let state = ledger::AppState::new(pool, blob_store)
-        .with_auth_token(token.map(|s| s.to_string()));
+        .with_auth_token(token.map(|s| s.to_string()))
+        .with_default_actor(Some("phase7-gateway-test".into()));
     let app = ledger::build_router(state);
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
