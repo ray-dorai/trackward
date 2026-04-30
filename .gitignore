@@ -2,3 +2,6 @@
 /.env
 *.swp
 .DS_Store
+
+# Claude Code per-machine hook config (filled-in absolute paths)
+.claude/settings.local.json
