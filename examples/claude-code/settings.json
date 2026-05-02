@@ -17,6 +17,10 @@
           {
             "type": "command",
             "command": "/PATH/TO/trackward/examples/claude-code/hooks/trackward-user-prompt.sh"
+          },
+          {
+            "type": "command",
+            "command": "/PATH/TO/trackward/examples/claude-code/hooks/trackward-snapshot.sh"
           }
         ]
       }
@@ -39,6 +43,10 @@
           {
             "type": "command",
             "command": "/PATH/TO/trackward/examples/claude-code/hooks/trackward-post-tool.sh"
+          },
+          {
+            "type": "command",
+            "command": "/PATH/TO/trackward/examples/claude-code/hooks/trackward-snapshot.sh"
           }
         ]
       }
@@ -49,6 +57,10 @@
           {
             "type": "command",
             "command": "/PATH/TO/trackward/examples/claude-code/hooks/trackward-stop.sh"
+          },
+          {
+            "type": "command",
+            "command": "/PATH/TO/trackward/examples/claude-code/hooks/trackward-snapshot.sh"
           }
         ]
       }
