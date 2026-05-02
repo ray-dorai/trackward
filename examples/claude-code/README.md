@@ -5,21 +5,49 @@ a hash-chained, signed audit dossier for every session.
 
 ## What gets recorded
 
+Two parallel streams cover the same activity from different angles:
+
+**Live event stream** (fired by hooks at the moment things happen):
+
 - **`SessionStart`** — mints a Trackward run, stashes its id at
-  `/tmp/trackward-claude-<session_id>.json` for the rest of the hooks.
-- **`UserPromptSubmit`** — every user prompt as a `user_message` event.
-- **`PreToolUse`** — every tool call (Bash, Read, Write, Edit, …) as a
-  `tool_call` event with a synthesized `call_id`. **Synchronous and
-  blocking** by Claude Code's contract: an exit code of 2 here would
-  refuse the tool. (Today these hooks always allow; policy enforcement
-  is a separate concern.)
+  `/tmp/trackward-claude-<session_id>.json`.
+- **`UserPromptSubmit`** — user prompt as `user_message` event.
+- **`PreToolUse`** — every tool call as `tool_call` with a synthesized
+  `call_id`. Synchronous and blocking by Claude Code's contract: exit
+  code 2 would refuse the tool. (Today these always allow.)
 - **`PostToolUse`** — paired `tool_result` event plus a first-class
-  `tool_invocation` row, correlated by `call_id`.
-- **`Stop`** — extracts the final assistant message from the transcript
-  and records it as `model_response`, then a `task_complete` marker.
+  `tool_invocation` row.
+- **`Stop`** — terminal assistant message as `model_response`, then
+  `task_complete` marker. Fires only when the agent truly stops (no
+  more iterations queued), so it's sparse.
 - **`SessionEnd`** — opens a case for the run, links the run as
   evidence, exports a signed dossier bundle to
-  `$TRACKWARD_BUNDLE_DIR` (default `/tmp`).
+  `$TRACKWARD_BUNDLE_DIR` (default `/tmp`), uploads the raw
+  transcript file as a `claude-code-transcript` artifact.
+
+**Transcript snapshot stream** (`trackward-snapshot.sh` fired alongside
+UserPromptSubmit, PostToolUse, Stop, SessionEnd) — POSTs every line
+of Claude Code's transcript JSONL that hasn't been posted yet, as a
+typed `transcript_*` event:
+
+- `transcript_assistant_text`, `transcript_assistant_thinking`,
+  `transcript_assistant_tool_use` (one per content block in an
+  assistant turn)
+- `transcript_user` (user prompts AND tool results, since Claude Code
+  stores both under role=user)
+- `transcript_system`, `transcript_attachment`,
+  `transcript_permission_mode`, `transcript_queue_operation`,
+  `transcript_file_history_snapshot`, `transcript_last_prompt`
+
+A per-session cursor at `/tmp/trackward-claude-<sid>-cursor` makes the
+snapshot idempotent — every transcript line is posted exactly once.
+
+**Why both streams.** The live events are the realtime audit signal
+(every tool call recorded synchronously, before it runs, hash-chained
+in order). The transcript stream is the completeness guarantee
+(literally every line Claude Code writes to disk lands in the dossier).
+They overlap on tool calls; the dossier reader can pick whichever they
+need.
 
 ## Why hooks (not a passive log scrape)
 
@@ -72,14 +100,22 @@ audit-grade evidence of agent behaviour.
 
 ## Limits worth naming
 
-- **Session-state file in `/tmp`** is not durable across machine
-  restarts mid-session. Acceptable for a v1; revisit if customers run
-  Claude Code in long-lived containers that survive ledger blips.
+- **Crash window between snapshots.** The snapshot fires on
+  UserPromptSubmit / PostToolUse / Stop / SessionEnd. A `kill -9` (or
+  ledger-unreachable error) between those events loses transcript
+  lines written in that interval. Live tool calls are always safe
+  (PreToolUse/PostToolUse fired synchronously). Ground-truth recovery:
+  the SessionEnd transcript-artifact upload — if even that's missed,
+  the operator still has the original transcript file on disk and can
+  re-mirror with `trackward-snapshot.sh` against the existing run_id.
+- **Session-state files in `/tmp`** are not durable across machine
+  restarts mid-session. Acceptable for v1; revisit if customers run
+  Claude Code in long-lived containers that survive a host reboot.
 - **`call_id` is synthesized client-side** (timestamp + pid). Good
   enough for single-machine sessions; not unique across a fleet.
 - **Hooks run under the user's shell environment.** If a hook script
   fails (network down, ledger unreachable), Claude Code by default
   continues — meaning there *can* be silent gaps. Set
-  `failOnHookError: true` in `settings.json` (Claude Code option) if
-  you want hard-stop behaviour. Trackward's preferred posture:
-  fail-loud, since a missing hook is the audit story breaking.
+  `failOnHookError: true` in `settings.json` if you want hard-stop
+  behaviour. Trackward's preferred posture: fail-loud, since a missing
+  hook is the audit story breaking.
