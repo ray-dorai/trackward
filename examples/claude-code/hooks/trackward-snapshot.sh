@@ -71,7 +71,7 @@ awk -v skip="$LAST" 'NR > skip' "$T" | while IFS= read -r line; do
       done < <(echo "$line" | jq -c '.message.content[]?' 2>/dev/null)
       ;;
 
-    user|system|attachment|permission-mode|queue-operation|file-history-snapshot|last-prompt)
+    user|system|attachment|permission-mode|queue-operation|file-history-snapshot|last-prompt|ai-title)
       # Sanitize hyphens in `kind` (ledger event kinds are free-form but
       # we keep them shell-safe for downstream queries).
       KIND="transcript_${TYPE//-/_}"
