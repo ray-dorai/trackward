@@ -16,14 +16,20 @@ signed chain of events, tool invocations, side effects, guardrail decisions,
 human approvals, and artifacts. Investigators can export a **signed dossier
 bundle** for any case and verify it offline with the `verifier` CLI.
 
-**Wiring an agent:** see
-[docs/integrate-an-agent.md](docs/integrate-an-agent.md) for the model.
-The first-class integration today is Claude Code via its hooks API — see
-[`examples/claude-code/`](examples/claude-code/) for a drop-in
-`settings.json` + six bash hooks that record every Bash/Read/Write/Edit
-plus model exchange into a signed dossier. For agents without a hooks
-API, run [`scripts/demo-agent-run.sh`](scripts/demo-agent-run.sh) as the
-gateway-front-of-tool template.
+**Integration: four tiers, pick by what your agent allows.** See
+[docs/integrate-an-agent.md](docs/integrate-an-agent.md) for the full guide.
+
+1. **Model API proxy** ([`tools/trackward-model-proxy/`](tools/trackward-model-proxy/))
+   — universal, captures every prompt and model output at the API boundary.
+   Works against any agent because every agent talks to a model API.
+2. **Hook-level** ([`examples/claude-code/`](examples/claude-code/)) — drop
+   `settings.json` into `~/.claude/`; semantically rich, agent-specific.
+3. **OS syscall capture** ([`tools/trackward-trace/`](tools/trackward-trace/))
+   — wrap the agent with `trackward-trace --`. Universal action-level capture.
+4. **Log mirror** — best-effort scrape, last resort.
+
+The strongest posture is **Tier 1 + Tier 3 together**: double-entry
+bookkeeping, model decisions cross-checked against kernel actions.
 
 ## Services
 
